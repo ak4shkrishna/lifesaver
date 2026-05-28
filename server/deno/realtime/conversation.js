@@ -78,7 +78,7 @@ export class RealtimeConversation {
             const { item_id, audio_end_ms } = event;
             const item = this.itemLookup[item_id];
             if (!item) {
-                throw new Error(`item.truncated: Item "${item_id}" not found`);
+                console.error(`item.truncated: Item "${item_id}" not found`); return { item: null, delta: null };
             }
             const endIndex = Math.floor(
                 (audio_end_ms * this.defaultFrequency) / 1000,
@@ -91,7 +91,7 @@ export class RealtimeConversation {
             const { item_id } = event;
             const item = this.itemLookup[item_id];
             if (!item) {
-                throw new Error(`item.deleted: Item "${item_id}" not found`);
+                console.error(`item.deleted: Item "${item_id}" not found`); return { item: null, delta: null };
             }
             delete this.itemLookup[item.id];
             const index = this.items.indexOf(item);
@@ -154,23 +154,23 @@ export class RealtimeConversation {
             const { response_id, item } = event;
             const response = this.responseLookup[response_id];
             if (!response) {
-                throw new Error(
-                    `response.output_item.added: Response "${response_id}" not found`,
-                );
+                return { item: null, delta: null };
             }
             response.output.push(item.id);
-            return { item: null, delta: null };
+            const newItem = JSON.parse(JSON.stringify(item));
+            newItem.formatted = { audio: new Int16Array(0), text: '', transcript: '', tool: null, output: null, file: null };
+            this.itemLookup[newItem.id] = newItem;
+            this.items.push(newItem);
+            return { item: newItem, delta: null };
         },
         'response.output_item.done': (event) => {
             const { item } = event;
             if (!item) {
-                throw new Error(`response.output_item.done: Missing "item"`);
+                console.error(`response.output_item.done: Missing "item"`); return { item: null, delta: null };
             }
             const foundItem = this.itemLookup[item.id];
             if (!foundItem) {
-                throw new Error(
-                    `response.output_item.done: Item "${item.id}" not found`,
-                );
+                return { item: null, delta: null };
             }
             foundItem.status = item.status;
             return { item: foundItem, delta: null };
@@ -178,21 +178,20 @@ export class RealtimeConversation {
         'response.content_part.added': (event) => {
             const { item_id, part } = event;
             const item = this.itemLookup[item_id];
-            if (!item) {
-                throw new Error(
-                    `response.content_part.added: Item "${item_id}" not found`,
-                );
-            }
-            item.content.push(part);
+           if (!item) {
+    console.error(
+        `response.content_part.added: Item "${item_id}" not found`,
+    );
+    return { item: null, delta: null };
+}
+item.content.push(part);
             return { item, delta: null };
         },
         'response.audio_transcript.delta': (event) => {
             const { item_id, content_index, delta } = event;
             const item = this.itemLookup[item_id];
             if (!item) {
-                throw new Error(
-                    `response.audio_transcript.delta: Item "${item_id}" not found`,
-                );
+                return { item: null, delta: null };
             }
             item.content[content_index].transcript += delta;
             item.formatted.transcript += delta;
@@ -202,7 +201,7 @@ export class RealtimeConversation {
             const { item_id, content_index, delta } = event;
             const item = this.itemLookup[item_id];
             if (!item) {
-                throw new Error(`response.audio.delta: Item "${item_id}" not found`);
+                console.error(`response.audio.delta: Item "${item_id}" not found`); return { item: null, delta: null };
             }
             // This never gets renderered, we care about the file data instead
             // item.content[content_index].audio += delta;
@@ -218,7 +217,7 @@ export class RealtimeConversation {
             const { item_id, content_index, delta } = event;
             const item = this.itemLookup[item_id];
             if (!item) {
-                throw new Error(`response.text.delta: Item "${item_id}" not found`);
+                console.error(`response.text.delta: Item "${item_id}" not found`); return { item: null, delta: null };
             }
             item.content[content_index].text += delta;
             item.formatted.text += delta;
@@ -228,9 +227,7 @@ export class RealtimeConversation {
             const { item_id, delta } = event;
             const item = this.itemLookup[item_id];
             if (!item) {
-                throw new Error(
-                    `response.function_call_arguments.delta: Item "${item_id}" not found`,
-                );
+                return { item: null, delta: null };
             }
             item.arguments += delta;
             item.formatted.tool.arguments += delta;
@@ -280,17 +277,15 @@ export class RealtimeConversation {
     processEvent(event, ...args) {
         if (!event.event_id) {
             console.error(event);
-            throw new Error(`Missing "event_id" on event`);
+            console.error(`Missing "event_id" on event`); return { item: null, delta: null };
         }
         if (!event.type) {
             console.error(event);
-            throw new Error(`Missing "type" on event`);
+            console.error(`Missing "type" on event`); return { item: null, delta: null };
         }
         const eventProcessor = this.EventProcessors[event.type];
         if (!eventProcessor) {
-            throw new Error(
-                `Missing conversation event processor for "${event.type}"`,
-            );
+            return { item: null, delta: null };
         }
         return eventProcessor.call(this, event, ...args);
     }
@@ -312,3 +307,6 @@ export class RealtimeConversation {
         return this.items.slice();
     }
 }
+
+
+

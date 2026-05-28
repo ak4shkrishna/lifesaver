@@ -1,8 +1,15 @@
-import { Buffer } from "node:buffer";
-import type { RawData } from "npm:@types/ws";
-import { WebSocket } from "npm:ws";
-import { addConversation, getDeviceInfo } from "../supabase.ts";
-import { createOpusPacketizer, isDev, humeApiKey, downsamplePcm, extractPcmFromWav, boostLimitPCM16LEInPlace } from "../utils.ts";
+import { Buffer } from 'node:buffer';
+import type { RawData } from 'npm:@types/ws';
+import { WebSocket } from 'npm:ws';
+import { addConversation, getDeviceInfo } from '../supabase.ts';
+import {
+    boostLimitPCM16LEInPlace,
+    createOpusPacketizer,
+    downsamplePcm,
+    extractPcmFromWav,
+    humeApiKey,
+    isDev,
+} from '../utils.ts';
 
 export const connectToHume = ({
     ws,
@@ -20,7 +27,7 @@ export const connectToHume = ({
     console.log(`Connecting to Hume with key "${humeApiKey?.slice(0, 3)}..."`);
 
     // Build Hume WebSocket URL
-    const configId = personality?.oai_voice ?? "";
+    const configId = personality?.oai_voice ?? '';
     const queryParams = new URLSearchParams({
         api_key: humeApiKey!,
         config_id: configId,
@@ -28,7 +35,9 @@ export const connectToHume = ({
 
     const humeWsUrl = `wss://api.hume.ai/v0/evi/chat?${queryParams.toString()}`;
 
-    console.log(`Connecting to Hume WebSocket at: ${humeWsUrl.replace(humeApiKey!, "API_KEY_HIDDEN")}`);
+    console.log(
+        `Connecting to Hume WebSocket at: ${humeWsUrl.replace(humeApiKey!, 'API_KEY_HIDDEN')}`,
+    );
     const humeWs = new WebSocket(humeWsUrl);
 
     let isConnected = false;
@@ -36,15 +45,15 @@ export const connectToHume = ({
     let createdSent = false;
 
     // Handle Hume WebSocket connection
-    humeWs.on("open", () => {
-        console.log("✅ Connected to Hume WebSocket API successfully");
+    humeWs.on('open', () => {
+        console.log('✅ Connected to Hume WebSocket API successfully');
         isConnected = true;
 
         // Configure Hume session settings for input audio format
         humeWs.send(JSON.stringify({
-            type: "session_settings",
+            type: 'session_settings',
             audio: {
-                encoding: "linear16",
+                encoding: 'linear16',
                 channels: 1,
                 sample_rate: 24000,
             },
@@ -53,7 +62,7 @@ export const connectToHume = ({
 
         // Send simple first message if provided
         humeWs.send(JSON.stringify({
-            type: "user_input",
+            type: 'user_input',
             text: firstMessage,
         }));
 
@@ -67,39 +76,39 @@ export const connectToHume = ({
     });
 
     // Handle messages from Hume
-    humeWs.on("message", async (data: Buffer) => {
+    humeWs.on('message', async (data: Buffer) => {
         try {
             const message: HumeMessage = JSON.parse(data.toString());
             console.log(`Received from Hume: ${message.type}`);
 
             switch (message.type) {
-                case "assistant_end":
+                case 'assistant_end':
                     // Flush any remaining audio
                     opus.flush(true);
 
                     // Send RESPONSE.COMPLETE when assistant message is done
                     ws.send(JSON.stringify({
-                        type: "server",
-                        msg: "RESPONSE.COMPLETE",
+                        type: 'server',
+                        msg: 'RESPONSE.COMPLETE',
                     }));
 
                     // Reset for next turn
                     createdSent = false;
                     break;
 
-                case "assistant_message":
+                case 'assistant_message':
                     const assistantMsg = message as HumeAssistantMessage;
 
                     // Store conversation in database
                     await addConversation(
                         supabase,
-                        "assistant",
+                        'assistant',
                         assistantMsg.message.content,
                         user,
                     );
                     break;
 
-                case "audio_output":
+                case 'audio_output':
                     const audioMsg = message as HumeAudioOutput;
 
                     // Send RESPONSE.CREATED before first audio chunk
@@ -110,21 +119,21 @@ export const connectToHume = ({
 
                             if (device) {
                                 ws.send(JSON.stringify({
-                                    type: "server",
-                                    msg: "RESPONSE.CREATED",
+                                    type: 'server',
+                                    msg: 'RESPONSE.CREATED',
                                     volume_control: device.volume ?? 70,
                                 }));
                             } else {
                                 ws.send(JSON.stringify({
-                                    type: "server",
-                                    msg: "RESPONSE.CREATED",
+                                    type: 'server',
+                                    msg: 'RESPONSE.CREATED',
                                 }));
                             }
                         } catch (error) {
-                            console.error("Error fetching device info:", error);
+                            console.error('Error fetching device info:', error);
                             ws.send(JSON.stringify({
-                                type: "server",
-                                msg: "RESPONSE.CREATED",
+                                type: 'server',
+                                msg: 'RESPONSE.CREATED',
                             }));
                         }
                         createdSent = true;
@@ -132,70 +141,74 @@ export const connectToHume = ({
 
                     try {
                         // Decode base64 audio data from Hume (this is a WAV file, not raw PCM!)
-                        const wavBuffer = Buffer.from(audioMsg.data, "base64");
+                        const wavBuffer = Buffer.from(audioMsg.data, 'base64');
 
                         // Extract PCM data from WAV file
                         const pcmData = extractPcmFromWav(wavBuffer);
 
                         if (!pcmData) {
-                            console.error("Failed to extract PCM data from WAV");
+                            console.error('Failed to extract PCM data from WAV');
                             return;
                         }
 
                         // Downsample from 48kHz to 24kHz to match our system
                         const downsampledPcm = downsamplePcm(pcmData, 48000, 24000);
-                        boostLimitPCM16LEInPlace(downsampledPcm, /*gainDb=*/6.0, /*ceiling=*/0.89);
+                        boostLimitPCM16LEInPlace(
+                            downsampledPcm,
+                            /*gainDb=*/ 6.0,
+                            /*ceiling=*/ 0.89,
+                        );
 
                         // Use Opus packetizer to encode and send audio
                         opus.push(downsampledPcm);
                     } catch (audioError) {
-                        console.error("Error processing Hume audio output:", audioError);
+                        console.error('Error processing Hume audio output:', audioError);
                     }
                     break;
 
-                case "chat_metadata":
-                    console.log("Chat metadata received:", message);
+                case 'chat_metadata':
+                    console.log('Chat metadata received:', message);
                     break;
 
-                case "user_message":
-                    console.log("User message acknowledged:", message);
+                case 'user_message':
+                    console.log('User message acknowledged:', message);
                     await addConversation(
                         supabase,
-                        "user",
+                        'user',
                         message.message.content,
                         user,
                     );
                     break;
 
-                case "user_input":
+                case 'user_input':
                     // This is an echo of our own input, we can log it but don't need to store it again
-                    console.log("User input acknowledged by Hume");
+                    console.log('User input acknowledged by Hume');
                     break;
 
-                case "error":
+                case 'error':
                     const errorMsg = message as HumeError;
                     console.error(`Hume error: ${errorMsg.code} - ${errorMsg.message}`);
 
                     ws.send(JSON.stringify({
-                        type: "server",
-                        msg: "RESPONSE.ERROR",
+                        type: 'server',
+                        msg: 'RESPONSE.ERROR',
                         error: errorMsg.message,
                     }));
                     break;
 
-                case "session_created":
-                    console.log("Hume session created");
+                case 'session_created':
+                    console.log('Hume session created');
                     ws.send(JSON.stringify({
-                        type: "server",
-                        msg: "SESSION.CREATED",
+                        type: 'server',
+                        msg: 'SESSION.CREATED',
                     }));
                     break;
 
-                case "session_ended":
-                    console.log("Hume session ended");
+                case 'session_ended':
+                    console.log('Hume session ended');
                     ws.send(JSON.stringify({
-                        type: "server",
-                        msg: "SESSION.END",
+                        type: 'server',
+                        msg: 'SESSION.END',
                     }));
                     break;
 
@@ -203,31 +216,31 @@ export const connectToHume = ({
                     console.log(`Unhandled Hume message type: ${message.type}`);
             }
         } catch (error) {
-            console.error("Error processing Hume message:", error);
+            console.error('Error processing Hume message:', error);
         }
     });
 
-    humeWs.on("close", (code: number, reason: Buffer) => {
+    humeWs.on('close', (code: number, reason: Buffer) => {
         console.log(`Hume WebSocket closed: ${code} - ${reason.toString()}`);
         ws.send(JSON.stringify({
-            type: "server",
-            msg: "SESSION.END",
+            type: 'server',
+            msg: 'SESSION.END',
         }));
         isConnected = false;
         ws.close();
     });
 
-    humeWs.on("error", (error: Error) => {
-        console.error("Hume WebSocket error:", error);
-        console.error("Error details:", {
+    humeWs.on('error', (error: Error) => {
+        console.error('Hume WebSocket error:', error);
+        console.error('Error details:', {
             message: error.message,
             stack: error.stack,
-            name: error.name
+            name: error.name,
         });
         ws.send(JSON.stringify({
-            type: "server",
-            msg: "RESPONSE.ERROR",
-            error: "Connection to Hume failed",
+            type: 'server',
+            msg: 'RESPONSE.ERROR',
+            error: 'Connection to Hume failed',
         }));
     });
 
@@ -236,10 +249,10 @@ export const connectToHume = ({
         try {
             if (isBinary) {
                 // Handle audio data from ESP32
-                const base64Audio = data.toString("base64");
+                const base64Audio = data.toString('base64');
 
                 const audioMessage: HumeAudioInput = {
-                    type: "audio_input",
+                    type: 'audio_input',
                     data: base64Audio,
                 };
 
@@ -253,12 +266,12 @@ export const connectToHume = ({
                 }
             }
         } catch (error) {
-            console.error("Error handling message:", error);
+            console.error('Error handling message:', error);
         }
     };
 
     // Set up ESP32 WebSocket handlers
-    ws.on("message", (data: RawData, isBinary: boolean) => {
+    ws.on('message', (data: RawData, isBinary: boolean) => {
         if (!isConnected) {
             messageQueue.push(data);
         } else {
@@ -266,12 +279,12 @@ export const connectToHume = ({
         }
     });
 
-    ws.on("error", (error: Error) => {
-        console.error("ESP32 WebSocket error:", error);
+    ws.on('error', (error: Error) => {
+        console.error('ESP32 WebSocket error:', error);
         humeWs.close();
     });
 
-    ws.on("close", async (code: number, reason: string) => {
+    ws.on('close', async (code: number, reason: string) => {
         console.log(`ESP32 WebSocket closed: ${code} - ${reason}`);
         await closeHandler();
         opus.close();
@@ -279,22 +292,22 @@ export const connectToHume = ({
 
         if (isDev && connectionPcmFile) {
             connectionPcmFile.close();
-            console.log("Closed debug audio file");
+            console.log('Closed debug audio file');
         }
     });
 
     // Wait for Hume connection to be established
     return new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => {
-            reject(new Error("Hume connection timeout"));
+            reject(new Error('Hume connection timeout'));
         }, 10000);
 
-        humeWs.on("open", () => {
+        humeWs.on('open', () => {
             clearTimeout(timeout);
             resolve();
         });
 
-        humeWs.on("error", (error) => {
+        humeWs.on('error', (error) => {
             clearTimeout(timeout);
             reject(error);
         });

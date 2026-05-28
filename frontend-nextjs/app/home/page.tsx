@@ -12,13 +12,14 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
     const supabase = createClient();
 
-    const {
-        data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-        redirect("/login");
-    }
+   const {
+    data: { user },
+    error,
+} = await supabase.auth.getUser();
+console.log("HOME USER:", user?.email, "ERROR:", error?.message);
+if (!user) {
+    redirect("/login");
+}
 
     if (user) {
         const userExists = await doesUserExist(supabase, user);

@@ -40,7 +40,7 @@ volatile bool sleepRequested = false;
  */
 
 #ifdef DEV_MODE
-const char *ws_server = "192.168.1.33";
+const char *ws_server = "10.111.187.209";
 const char *ws_path = "/";
 
 #if defined(VOICE_SERVER_DENO)
@@ -50,7 +50,7 @@ const uint16_t ws_port = 8787;
 #endif
 
 // Backend server details 
-const char *backend_server = "192.168.1.33";
+const char *backend_server = "10.111.187.209";
 const uint16_t backend_port = 3000;
 
 #elif defined(PROD_MODE)

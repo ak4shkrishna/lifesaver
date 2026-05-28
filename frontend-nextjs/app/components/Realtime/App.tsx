@@ -116,7 +116,7 @@ function App({ personalityIdState, isDoctor, userId }: AppProps) {
     const data = await tokenResponse.json();
     logServerEvent(data, "fetch_session_token_response");
 
-    if (!data.client_secret?.value) {
+    if (!data.value) {
       logClientEvent(data, "error.no_ephemeral_key");
       setSessionStatus("DISCONNECTED");
       toast({
@@ -124,8 +124,7 @@ function App({ personalityIdState, isDoctor, userId }: AppProps) {
       });
       return null;
     }
-
-    return data.client_secret.value;
+    return data.value;
   };
 
   const connectToRealtime = async () => {

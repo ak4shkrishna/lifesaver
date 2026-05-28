@@ -331,7 +331,7 @@ export class RealtimeClient extends RealtimeEventHandler {
         this.realtime.on('server.conversation.item.created', (event) => {
             const { item } = handlerWithDispatch(event);
             this.dispatch('conversation.item.appended', { item });
-            if (item.status === 'completed') {
+            if (item && item.status === "completed") {
                 this.dispatch('conversation.item.completed', { item });
             }
         });
@@ -353,10 +353,10 @@ export class RealtimeClient extends RealtimeEventHandler {
         );
         this.realtime.on('server.response.output_item.done', async (event) => {
             const { item } = handlerWithDispatch(event);
-            if (item.status === 'completed') {
+            if (item && item.status === "completed") {
                 this.dispatch('conversation.item.completed', { item });
             }
-            if (item.formatted.tool) {
+            if (item && item.formatted && item.formatted.tool) {
                 callTool(item.formatted.tool);
             }
         });
@@ -546,7 +546,7 @@ export class RealtimeClient extends RealtimeEventHandler {
                 };
             }),
         );
-        const session = { ...this.sessionConfig };
+        const session = { type: 'realtime', ...this.sessionConfig };
         session.tools = useTools;
         if (this.realtime.isConnected()) {
             this.realtime.send('session.update', { session });
@@ -674,3 +674,13 @@ export class RealtimeClient extends RealtimeEventHandler {
         return { item };
     }
 }
+
+
+
+
+
+
+
+
+
+

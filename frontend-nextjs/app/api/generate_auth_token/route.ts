@@ -108,6 +108,7 @@ export async function GET(req: Request) {
 
         return NextResponse.json({ token });
     } catch (error) {
+        console.error("Auth token error:", error);
         return NextResponse.json(
             {
                 error: error instanceof Error

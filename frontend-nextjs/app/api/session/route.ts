@@ -153,7 +153,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const response = await fetch(
-      "https://api.openai.com/v1/realtime/sessions",
+      "https://api.openai.com/v1/realtime/client_secrets",
       {
         method: "POST",
         headers: {
@@ -161,11 +161,19 @@ export async function GET(request: NextRequest) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "gpt-realtime-1.5",
-          instructions: systemPrompt,
-          voice: dbUser.personality?.oai_voice ?? "ballad",
-        }),
+  expires_after: { anchor: "created_at", seconds: 600 },
+  session: {
+    type: "realtime",
+    model: "gpt-realtime-2",
+    instructions: systemPrompt,
+    audio: {
+      output: {
+        voice: dbUser.personality?.oai_voice ?? "alloy",
       },
+    },
+  },
+}),
+      }
     );
     console.log(response);
     const data = await response.json();

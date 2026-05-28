@@ -20,10 +20,7 @@ export async function createRealtimeConnection(
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
 
-  const baseUrl = "https://api.openai.com/v1/realtime";
-  const model = "gpt-realtime-1.5";
-
-  const sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
+  const sdpResponse = await fetch("https://api.openai.com/v1/realtime/calls", {
     method: "POST",
     body: offer.sdp,
     headers: {
@@ -32,7 +29,9 @@ export async function createRealtimeConnection(
     },
   });
 
-  const answerSdp = await sdpResponse.text();
+ const answerSdpText = await sdpResponse.text();
+  console.log("SDP RESPONSE STATUS:", sdpResponse.status, "BODY:", answerSdpText.substring(0, 300));
+  const answerSdp = answerSdpText;
   const answer: RTCSessionDescriptionInit = {
     type: "answer",
     sdp: answerSdp,

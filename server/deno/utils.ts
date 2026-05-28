@@ -1,15 +1,15 @@
-import * as jose from "https://deno.land/x/jose@v5.9.6/index.ts";
-import { getUserByEmail } from "./supabase.ts";
-import { SupabaseClient } from "@supabase/supabase-js";
-import crypto from "node:crypto";
-import { Buffer } from "node:buffer";
-import { Encoder } from "@evan/opus";
+import * as jose from 'https://deno.land/x/jose@v5.9.6/index.ts';
+import { getUserByEmail } from './supabase.ts';
+import { SupabaseClient } from '@supabase/supabase-js';
+import crypto from 'node:crypto';
+import { Buffer } from 'node:buffer';
+import { Encoder } from '@evan/opus';
 
 export const defaultVolume = 50;
 
-export const defaultGeminiVoice = "Sadachbia";
-export const defaultOpenAIVoice = "ash";
-export const defaultGrokVoice = "Ara";
+export const defaultGeminiVoice = 'Sadachbia';
+export const defaultOpenAIVoice = 'ash';
+export const defaultGrokVoice = 'Ara';
 
 // Define your audio parameters
 export const SAMPLE_RATE = 24000; // For example, 24000 Hz
@@ -23,7 +23,7 @@ export function createOpusEncoder() {
     const enc = new Encoder({
         channels: CHANNELS,
         sample_rate: SAMPLE_RATE,
-        application: "voip",
+        application: 'voip',
     });
 
     enc.expert_frame_duration = FRAME_DURATION;
@@ -51,7 +51,7 @@ export function createOpusPacketizer(
                 const packet = enc.encode(frame);
                 sendPacket(packet);
             } catch (err) {
-                console.error("Opus encode failed:", err);
+                console.error('Opus encode failed:', err);
             }
         }
     };
@@ -73,7 +73,7 @@ export function createOpusPacketizer(
             const packet = enc.encode(padded);
             sendPacket(packet);
         } catch (err) {
-            console.error("Opus encode failed:", err);
+            console.error('Opus encode failed:', err);
         }
     };
 
@@ -95,30 +95,30 @@ export function createOpusPacketizer(
 const encoder = new Encoder({
     channels: CHANNELS,
     sample_rate: SAMPLE_RATE,
-    application: "voip",
+    application: 'voip',
 });
 
 encoder.expert_frame_duration = FRAME_DURATION;
 encoder.bitrate = 24000;
 
-export const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
-export const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
-export const elevenLabsApiKey = Deno.env.get("ELEVENLABS_API_KEY");
+export const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+export const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+export const elevenLabsApiKey = Deno.env.get('ELEVENLABS_API_KEY');
 export const humeApiKey = Deno.env.get('HUME_API_KEY');
 export const xaiApiKey = Deno.env.get('XAI_API_KEY');
 
 export { encoder, FRAME_SIZE };
 
-export const isDev = Deno.env.get("DEV_MODE") === "True";
+export const isDev = Deno.env.get('DEV_MODE') === 'True';
 
 export const authenticateUser = async (
     supabaseClient: SupabaseClient,
     authToken: string,
 ): Promise<IUser> => {
     try {
-        const jwtSecret = Deno.env.get("JWT_SECRET_KEY");
+        const jwtSecret = Deno.env.get('JWT_SECRET_KEY');
 
-        if (!jwtSecret) throw new Error("JWT_SECRET_KEY not configured");
+        if (!jwtSecret) throw new Error('JWT_SECRET_KEY not configured');
 
         const secretBytes = new TextEncoder().encode(jwtSecret);
         const payload = await jose.jwtVerify(authToken, secretBytes);
@@ -127,7 +127,7 @@ export const authenticateUser = async (
         const user = await getUserByEmail(supabaseClient, email as string);
         return user;
     } catch (error: any) {
-        throw new Error(error.message || "Failed to authenticate user");
+        throw new Error(error.message || 'Failed to authenticate user');
     }
 };
 
@@ -144,29 +144,28 @@ export function decryptSecret(
     masterKey: string,
 ) {
     // Decode the base64 master key
-    const decodedKey = Buffer.from(masterKey, "base64");
+    const decodedKey = Buffer.from(masterKey, 'base64');
     if (decodedKey.length !== 32) {
         throw new Error(
-            "ENCRYPTION_KEY must be 32 bytes when decoded from base64.",
+            'ENCRYPTION_KEY must be 32 bytes when decoded from base64.',
         );
     }
 
     const decipher = crypto.createDecipheriv(
-        "aes-256-cbc",
+        'aes-256-cbc',
         decodedKey, // Use the decoded key instead of raw masterKey
-        Buffer.from(iv, "base64"),
+        Buffer.from(iv, 'base64'),
     );
 
-    let decrypted = decipher.update(encryptedData, "base64", "utf8");
-    decrypted += decipher.final("utf8");
+    let decrypted = decipher.update(encryptedData, 'base64', 'utf8');
+    decrypted += decipher.final('utf8');
     return decrypted;
 }
 
-
 export function boostLimitPCM16LEInPlace(
-    pcmBytes: Uint8Array,      // Buffer is fine (subclass of Uint8Array)
+    pcmBytes: Uint8Array, // Buffer is fine (subclass of Uint8Array)
     gainDb = 6.0,
-    ceiling = 0.89,            // ≈ −1 dBFS
+    ceiling = 0.89, // ≈ −1 dBFS
 ): void {
     const dv = new DataView(pcmBytes.buffer, pcmBytes.byteOffset, pcmBytes.byteLength);
     const g = Math.pow(10, gainDb / 20);
@@ -193,7 +192,6 @@ export function boostLimitPCM16LEInPlace(
     }
 }
 
-
 // Function to downsample PCM audio from 48kHz to 24kHz
 export function downsamplePcm(pcmBuffer: Buffer, fromRate: number, toRate: number): Buffer {
     if (fromRate === toRate) {
@@ -213,7 +211,6 @@ export function downsamplePcm(pcmBuffer: Buffer, fromRate: number, toRate: numbe
 
     return outputBuffer;
 }
-
 
 // Function to extract PCM data from WAV file
 export function extractPcmFromWav(wavBuffer: Buffer): Buffer | null {

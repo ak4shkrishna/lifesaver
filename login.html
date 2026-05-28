@@ -1,0 +1,408 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>LIFESAVER — Sign In</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --red:#E8251A;--red2:#FF4436;--red-dim:rgba(232,37,26,0.14);--red-glow:rgba(232,37,26,0.35);
+  --aqua:#00D4FF;--black:#060608;--surface:#0C0D10;--surface2:#121318;--surface3:#191B22;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --text:#EEF0F5;--muted:#5A5E70;--muted2:#8B90A8;
+  --mono:'DM Mono',monospace;--display:'Bebas Neue',sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--black);color:var(--text);font-family:var(--mono);
+  min-height:100vh;display:flex;align-items:center;justify-content:center;}
+.bg{position:fixed;inset:0;z-index:0;
+  background:radial-gradient(ellipse 50% 60% at 15% 30%,rgba(232,37,26,0.1),transparent 70%),
+             radial-gradient(ellipse 40% 50% at 85% 70%,rgba(0,212,255,0.06),transparent 60%);}
+.bg::after{content:'';position:fixed;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.1) 2px,rgba(0,0,0,0.1) 4px);}
+
+/* ── LOADER ── */
+#loader{
+  position:fixed;inset:0;z-index:200;background:var(--black);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;
+  transition:opacity 0.3s;
+}
+#loader.gone{opacity:0;pointer-events:none;}
+.loader-logo{font-family:var(--display);font-size:56px;letter-spacing:6px;}
+.loader-logo span{color:var(--red);}
+.loader-msg{font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted2);}
+.spinner{width:28px;height:28px;border:2px solid var(--border2);
+  border-top-color:var(--red);border-radius:50%;animation:spin 0.8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── TABS ── */
+.mode-tabs{display:flex;gap:0;border:1px solid var(--border2);border-radius:2px;
+  overflow:hidden;margin-bottom:24px;}
+.mode-tab{flex:1;padding:10px 16px;background:transparent;border:none;cursor:pointer;
+  font-family:var(--mono);font-size:11px;letter-spacing:0.12em;text-transform:uppercase;
+  color:var(--muted2);transition:all 0.2s;border-right:1px solid var(--border2);}
+.mode-tab:last-child{border-right:none;}
+.mode-tab.active{background:var(--red);color:#fff;}
+
+/* ── ADMIN GATE ── */
+.admin-notice{
+  padding:10px 14px;margin-bottom:16px;
+  background:rgba(0,212,255,0.06);border:1px solid rgba(0,212,255,0.2);
+  border-radius:2px;font-size:10px;color:var(--aqua);letter-spacing:0.05em;
+  line-height:1.7;
+}
+.admin-notice strong{display:block;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:4px;font-size:9px;}
+
+/* ── CARD ── */
+.wrap{position:relative;z-index:1;width:420px;max-width:calc(100vw - 32px);
+  opacity:0;transition:opacity 0.4s;}
+.wrap.show{opacity:1;}
+.logo{font-family:var(--display);font-size:52px;letter-spacing:6px;
+  text-align:center;margin-bottom:8px;line-height:1;}
+.logo span{color:var(--red);}
+.sub{text-align:center;font-size:12px;letter-spacing:0.15em;text-transform:uppercase;
+  color:var(--muted2);margin-bottom:36px;}
+.card{background:var(--surface);border:1px solid var(--border2);border-radius:4px;
+  padding:32px;box-shadow:0 32px 64px rgba(0,0,0,0.5);position:relative;overflow:hidden;}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,var(--red),var(--aqua));}
+
+/* google btn */
+.google-btn{width:100%;padding:14px 20px;background:var(--surface2);color:var(--text);
+  border:1px solid var(--border2);border-radius:2px;cursor:pointer;font-family:var(--mono);
+  font-size:13px;letter-spacing:0.04em;transition:all 0.2s;
+  display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:16px;}
+.google-btn:hover{border-color:rgba(255,255,255,0.3);background:var(--surface3);transform:translateY(-1px);}
+.google-btn:disabled{opacity:0.5;cursor:not-allowed;transform:none;}
+.g-logo{width:18px;height:18px;flex-shrink:0;}
+
+.divider{display:flex;align-items:center;gap:12px;margin:16px 0;
+  font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted);}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* fields */
+.field{margin-bottom:14px;}
+.lbl{font-size:9px;letter-spacing:0.2em;text-transform:uppercase;
+  color:var(--muted);display:block;margin-bottom:5px;}
+.inp{width:100%;padding:12px 14px;background:var(--surface2);border:1px solid var(--border);
+  border-radius:2px;color:var(--text);font-family:var(--mono);font-size:13px;
+  outline:none;transition:border-color 0.2s,box-shadow 0.2s;}
+.inp::placeholder{color:var(--muted);}
+.inp:focus{border-color:var(--red);box-shadow:0 0 0 3px var(--red-dim);}
+.submit{width:100%;padding:14px;background:var(--red);color:#fff;border:none;
+  border-radius:2px;cursor:pointer;font-family:var(--display);font-size:22px;letter-spacing:4px;
+  transition:background 0.2s,box-shadow 0.2s,transform 0.1s;}
+.submit:hover{background:var(--red2);box-shadow:0 8px 28px var(--red-glow);transform:translateY(-1px);}
+.submit:disabled{opacity:0.5;cursor:not-allowed;transform:none;}
+
+/* admin submit — aqua tint to distinguish */
+.submit.admin-submit{background:linear-gradient(90deg,#003a47,#001f2e);
+  border:1px solid rgba(0,212,255,0.4);color:var(--aqua);}
+.submit.admin-submit:hover{background:linear-gradient(90deg,#004d61,#002a3a);
+  box-shadow:0 8px 28px rgba(0,212,255,0.2);}
+
+/* status */
+#status{padding:11px 14px;border-radius:2px;font-size:12px;
+  border:1px solid transparent;margin-top:12px;display:none;line-height:1.6;}
+#status.show{display:block;}
+#status.err{background:var(--red-dim);border-color:rgba(232,37,26,0.35);color:var(--red2);}
+#status.ok {background:rgba(0,212,255,0.07);border-color:rgba(0,212,255,0.3);color:var(--aqua);}
+#status.info{background:rgba(255,255,255,0.04);border-color:var(--border2);color:var(--muted2);}
+
+/* demo */
+.demo{margin-top:16px;padding:11px 14px;background:var(--surface3);
+  border:1px solid var(--border);border-radius:2px;font-size:10px;line-height:2.2;color:var(--muted2);}
+.demo-lbl{font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin-bottom:4px;}
+.fill{color:var(--aqua);cursor:pointer;background:none;border:none;
+  font-family:var(--mono);font-size:10px;text-decoration:underline;padding:0;}
+.links{text-align:center;margin-top:14px;font-size:11px;color:var(--muted);}
+.links a{color:var(--muted2);text-decoration:none;transition:color 0.2s;}
+.links a:hover{color:var(--text);}
+
+/* shake animation for wrong admin creds */
+@keyframes shake{0%,100%{transform:translateX(0);}20%,60%{transform:translateX(-6px);}40%,80%{transform:translateX(6px);}}
+.shake{animation:shake 0.4s ease;}
+</style>
+</head>
+<body>
+<div class="bg"></div>
+
+<!-- ── LOADER: shown while Firebase resolves auth state ── -->
+<div id="loader">
+  <div class="loader-logo">LIFE<span>SAVER</span></div>
+  <div class="spinner"></div>
+  <div class="loader-msg" id="loader-msg">Checking session…</div>
+</div>
+
+<!-- ── LOGIN CARD ── -->
+<div class="wrap" id="wrap">
+  <div class="logo">LIFE<span>SAVER</span></div>
+  <div class="sub">Emergency Response Network</div>
+  <div class="card" id="login-card">
+
+    <!-- MODE TABS -->
+    <div class="mode-tabs">
+      <button class="mode-tab active" id="tab-citizen" onclick="switchMode('citizen')">🌐 &nbsp;Citizen / Donor</button>
+      <button class="mode-tab" id="tab-admin" onclick="switchMode('admin')">🖥️ &nbsp;Admin Access</button>
+    </div>
+
+    <!-- ══════ CITIZEN PANEL ══════ -->
+    <div id="citizen-panel">
+    <button class="google-btn" id="g-btn" onclick="googleSignIn()">
+      <svg class="g-logo" viewBox="0 0 24 24">
+        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+      </svg>
+      Continue with Google
+    </button>
+
+      <div class="divider">or email login</div>
+    <div class="field">
+      <label class="lbl">Email</label>
+        <input class="inp" id="em" type="email" placeholder="you@email.com" autocomplete="email"/>
+    </div>
+    <div class="field">
+      <label class="lbl">Password</label>
+      <input class="inp" id="pw" type="password" placeholder="••••••••" autocomplete="current-password"/>
+    </div>
+    <button class="submit" id="sub-btn" onclick="emailLogin()">SIGN IN</button>
+    <div class="demo">
+        <div class="demo-lbl">// Demo accounts</div>
+      <div>Citizen: <button class="fill" onclick="fill('user@lifesaver.in','user123')">user@lifesaver.in / user123</button></div>
+    </div>
+    </div>
+
+    <!-- ══════ ADMIN PANEL ══════ -->
+    <div id="admin-panel" style="display:none;">
+      <div class="admin-notice">
+        <strong>⬛ Restricted — Admin Access Only</strong>
+        Enter your admin credentials below. Google sign-in is not available for admin accounts.
+      </div>
+
+      <div class="field">
+        <label class="lbl">Admin Username</label>
+        <input class="inp" id="admin-user" type="text" placeholder="Username" autocomplete="off" autocorrect="off" spellcheck="false"/>
+      </div>
+      <div class="field">
+        <label class="lbl">Admin Password</label>
+        <input class="inp" id="admin-pass" type="password" placeholder="••••••••" autocomplete="off"/>
+      </div>
+      <button class="submit admin-submit" id="admin-btn" onclick="adminLogin()">⬛ &nbsp;ACCESS COMMAND CENTER</button>
+    </div>
+
+    <!-- Shared status -->
+    <div id="status"></div>
+    <div class="links"><a href="index.html">← Back to public portal</a></div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithRedirect, signInWithPopup,
+         getRedirectResult, signInWithEmailAndPassword,
+         createUserWithEmailAndPassword, onAuthStateChanged }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+const app = initializeApp({
+  apiKey:            "AIzaSyCnhFsE3JrCBljOHjDpF_d8msWuzEwCed4",
+  authDomain:        "lifesaver-9e934.firebaseapp.com",
+  projectId:         "lifesaver-9e934",
+  storageBucket:     "lifesaver-9e934.firebasestorage.app",
+  messagingSenderId: "98404171306",
+  appId:             "1:98404171306:android:8f6950beeebd43fd5e0d53"
+});
+const auth     = getAuth(app);
+const provider = new GoogleAuthProvider();
+
+// ── Add your Gmail here to get admin access ───────────────────
+const ADMIN_EMAILS = [
+  "akashkrishna7890@gmail.com",
+  "admin@lifesaver.in",
+];
+
+// ── Helpers ───────────────────────────────────────────────────
+const loader  = document.getElementById("loader");
+const loaderMsg = document.getElementById("loader-msg");
+const wrap    = document.getElementById("wrap");
+
+function setLoader(msg) { loaderMsg.textContent = msg; }
+
+function showForm() {
+  loader.classList.add("gone");
+  wrap.classList.add("show");
+}
+
+function route(email) {
+  const isAdmin = ADMIN_EMAILS.map(e=>e.toLowerCase()).includes(email.toLowerCase().trim());
+  localStorage.setItem("ls_role",  isAdmin ? "admin" : "citizen");
+  localStorage.setItem("ls_email", email);
+  setLoader("Routing to " + (isAdmin ? "Command Center" : "Citizen Portal") + "…");
+  // Use replace so back button doesn't return to login
+  window.location.replace(isAdmin ? "admin.html" : "index.html");
+}
+
+function setStatus(msg, type) {
+  const el = document.getElementById("status");
+  el.textContent = msg;
+  el.className = "show " + (type || "info");
+}
+
+// ── CORE AUTH LISTENER ────────────────────────────────────────
+// This is the single source of truth. It fires:
+//   (a) immediately with null  → not signed in yet
+//   (b) immediately with user  → already signed in (existing session)
+//   (c) again with user        → just completed a redirect sign-in
+//
+// We wait for BOTH getRedirectResult AND onAuthStateChanged to
+// resolve before deciding what to do.
+
+let redirectChecked = false;
+let authStateResolved = false;
+let pendingUser = null;
+
+function tryRoute() {
+  // Only proceed once BOTH checks have reported back
+  if (!redirectChecked || !authStateResolved) return;
+
+  if (pendingUser) {
+    route(pendingUser.email);
+  } else {
+    // No user from either source — show the login form
+    showForm();
+  }
+}
+
+// Check 1: Is there a pending Google redirect result?
+getRedirectResult(auth)
+  .then(result => {
+    if (result && result.user) {
+      pendingUser = result.user;
+    }
+  })
+  .catch(err => {
+    console.warn("getRedirectResult error:", err.code, err.message);
+    // Show error only for real errors, not "no redirect"
+    if (err.code && err.code !== "auth/no-such-provider" &&
+        err.code !== "auth/null-user") {
+      setStatus(err.message + " (" + err.code + ")", "err");
+    }
+  })
+  .finally(() => {
+    redirectChecked = true;
+    tryRoute();
+  });
+
+// Check 2: What is the current auth state?
+const unsubscribe = onAuthStateChanged(auth, user => {
+  if (user) {
+    // User is signed in (existing session or just completed redirect)
+    pendingUser = user;
+  }
+  authStateResolved = true;
+  unsubscribe(); // only need first emission
+  tryRoute();
+});
+
+// ── GOOGLE SIGN-IN ────────────────────────────────────────────
+// Try popup first (instant UX), fall back to redirect if blocked
+window.googleSignIn = async () => {
+  const btn = document.getElementById("g-btn");
+  btn.disabled = true;
+  btn.innerHTML = `<div class="spinner" style="width:18px;height:18px;flex-shrink:0;margin:0 0 0 -4px;"></div> Connecting to Google…`;
+  setStatus("", "");
+
+  try {
+    // Try popup (works when OAuth origins are configured correctly)
+    const result = await signInWithPopup(auth, provider);
+    route(result.user.email);
+  } catch(popupErr) {
+    console.log("Popup failed:", popupErr.code, "— trying redirect…");
+
+    if (popupErr.code === "auth/popup-closed-by-user") {
+      // User closed it deliberately
+      btn.disabled = false;
+      btn.innerHTML = `<svg class="g-logo" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg> Continue with Google`;
+      setStatus("Sign-in cancelled.", "info");
+      return;
+    }
+
+    if (popupErr.code === "auth/popup-blocked" ||
+        popupErr.code === "auth/operation-not-supported-in-this-environment") {
+      // Fall back to redirect
+      setStatus("Popup blocked — redirecting to Google…", "info");
+      try {
+        await signInWithRedirect(auth, provider);
+        // Page navigates away here — nothing runs after this
+      } catch(redirErr) {
+        btn.disabled = false;
+        btn.innerHTML = `<svg class="g-logo" viewBox="0 0 24 24">...</svg> Continue with Google`;
+        setStatus("Error: " + redirErr.message, "err");
+      }
+      return;
+    }
+
+    // Any other error
+    btn.disabled = false;
+    btn.innerHTML = `<svg class="g-logo" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg> Continue with Google`;
+    setStatus("Google sign-in failed: " + popupErr.message + " (" + popupErr.code + ")", "err");
+  }
+};
+
+// ── EMAIL LOGIN (demo accounts) ───────────────────────────────
+const DEMO_PW = {
+  "admin@lifesaver.in": "admin123",
+  "user@lifesaver.in":  "user123",
+  "donor@lifesaver.in": "donor123",
+};
+
+window.emailLogin = async () => {
+  const email = document.getElementById("em").value.trim().toLowerCase();
+  const pass  = document.getElementById("pw").value;
+  const btn   = document.getElementById("sub-btn");
+  if (!email || !pass) { setStatus("Enter your email and password.", "err"); return; }
+  btn.disabled = true; btn.textContent = "SIGNING IN…";
+  setStatus("", "");
+  try {
+    await signInWithEmailAndPassword(auth, email, pass);
+    routeCitizen(email);
+  } catch(e) {
+    if (e.code === "auth/user-not-found" || e.code === "auth/invalid-credential" ||
+        e.code === "auth/wrong-password") {
+      if (DEMO_PW[email] === pass) {
+        try {
+          await createUserWithEmailAndPassword(auth, email, pass);
+          routeCitizen(email);
+          return;
+        } catch(e2) {
+          setStatus("Could not create account: " + e2.message, "err");
+        }
+      } else {
+        setStatus("Wrong credentials. Use a demo account or Continue with Google.", "err");
+      }
+    } else if (e.code === "auth/too-many-requests") {
+      setStatus("Too many attempts. Wait a moment and try again.", "err");
+    } else {
+      setStatus("Error: " + e.message, "err");
+    }
+    btn.disabled = false; btn.textContent = "SIGN IN";
+  }
+};
+
+window.fill = (e, p) => {
+  document.getElementById("em").value = e;
+  document.getElementById("pw").value  = p;
+  setStatus("", "");
+};
+
+document.addEventListener("keydown", ev => {
+  if (ev.key !== "Enter") return;
+  const adminVisible = document.getElementById("admin-panel").style.display !== "none";
+  adminVisible ? window.adminLogin() : window.emailLogin();
+});
+</script>
+</body>
+</html>

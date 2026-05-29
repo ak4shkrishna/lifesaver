@@ -398,14 +398,25 @@ body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;
       </div>
 
       <!-- Inventory + Verify -->
-      <div class="two-col">
+      <div class="three-col" style="grid-template-columns:1fr 1fr 1fr;">
         <div class="panel">
           <div class="panel-header">
             <div class="panel-title">// Blood Inventory Matrix</div>
             <button class="btn-sm" onclick="openRestockModal()">Request Restock</button>
           </div>
-          <div class="inv-grid" id="inv-grid-dash"></div>
+          <div class="inv-grid" id="inv-grid-dash" style="grid-template-columns:repeat(2,1fr);"></div>
         </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">// Medicine Inventory Matrix</div>
+            <button class="btn-sm" onclick="refreshMedInv()">↻ Refresh</button>
+          </div>
+          <div class="panel-body" id="med-inv-dash">
+            <div class="empty-state"><div class="icon">💊</div>Loading…</div>
+          </div>
+        </div>
+
         <div class="panel">
           <div class="panel-header">
             <div class="panel-title">// Hero Verification Queue</div>
@@ -726,9 +737,16 @@ body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, addDoc, getDocs, query, where,
          orderBy, limit, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const ADMIN_EMAILS = [
+  "akashkrishna7890@gmail.com",
+  "admin@lifesaver.in",
+];
 
 const app = initializeApp({
   apiKey:"AIzaSyCnhFsE3JrCBljOHjDpF_d8msWuzEwCed4",
@@ -738,7 +756,77 @@ const app = initializeApp({
   messagingSenderId:"98404171306",
   appId:"1:98404171306:android:8f6950beeebd43fd5e0d53"
 });
-const db = getFirestore(app);
+const db   = getFirestore(app);
+const auth = getAuth(app);
+
+// ── BLOCK ACCESS UI ───────────────────────────────────────────
+function blockAccess() {
+  document.body.style.opacity = "0";
+  setTimeout(() => {
+    document.body.innerHTML = `
+      <div style="
+        min-height:100vh;background:#0A0A0F;display:flex;flex-direction:column;
+        align-items:center;justify-content:center;gap:20px;
+        font-family:'DM Mono',monospace;opacity:1;transition:opacity 0.3s;
+      ">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:52px;
+          letter-spacing:6px;color:#F0EEF8;">
+          LIFE<span style="color:#FF4444;">SAVER</span>
+        </div>
+        <div style="
+          padding:28px 36px;background:#111117;
+          border:1px solid rgba(255,68,68,0.25);border-radius:12px;
+          text-align:center;max-width:380px;
+        ">
+          <div style="font-size:36px;margin-bottom:14px;">🔒</div>
+          <div style="font-size:14px;color:#F0EEF8;margin-bottom:8px;
+            font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:3px;">
+            ACCESS DENIED
+          </div>
+          <div style="font-size:12px;color:#8A8AA0;margin-bottom:22px;line-height:1.7;">
+            This area is restricted to authorised admin only.<br/>
+            Please sign in with your admin credentials.
+          </div>
+          <a href="login.html" style="
+            display:block;padding:13px;background:#FF4444;color:#fff;
+            border-radius:8px;font-size:11px;letter-spacing:0.14em;
+            text-transform:uppercase;text-decoration:none;
+            font-family:'DM Mono',monospace;
+          ">← Go to Admin Login</a>
+        </div>
+      </div>`;
+    document.body.style.opacity = "1";
+  }, 100);
+}
+
+// ── GUARD: check localStorage flag ───────────────────────────
+const adminFlag      = localStorage.getItem("ls_admin_authed");
+const verifiedAt     = parseInt(localStorage.getItem("ls_admin_verified_at") || "0");
+const TWO_HOURS      = 2 * 60 * 60 * 1000;
+const sessionExpired = Date.now() - verifiedAt > TWO_HOURS;
+
+if (adminFlag !== "1" || sessionExpired) {
+  if (sessionExpired) {
+    localStorage.removeItem("ls_admin_authed");
+    localStorage.removeItem("ls_admin_verified_at");
+  }
+  blockAccess();
+  throw new Error("Unauthorized");
+}
+
+// ── GUARD: if a Firebase user is logged in, must be admin email ──
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    const isAdminEmail = ADMIN_EMAILS
+      .map(e => e.toLowerCase())
+      .includes(user.email.toLowerCase());
+    if (!isAdminEmail) {
+      localStorage.removeItem("ls_admin_authed");
+      localStorage.removeItem("ls_admin_verified_at");
+      blockAccess();
+    }
+  }
+});
 
 // Expose db and Firestore helpers globally for non-module functions
 window._db = db;
@@ -1011,6 +1099,65 @@ function renderInv(id){
       <div class="inv-status ${c}">${label}</div></div>`;
   }).join("");
 }
+
+// ── MEDICINE INVENTORY MATRIX ─────────────────────────────────
+async function loadMedInvDash() {
+  const el = document.getElementById("med-inv-dash");
+  if (!el) return;
+  try {
+    const snap = await getDocs(
+      query(collection(db,"donors"), where("category","==","MEDICINE"))
+    );
+
+    if (!snap.size) {
+      el.innerHTML = `<div class="empty-state"><div class="icon">💊</div>No medicine providers yet</div>`;
+      return;
+    }
+
+    // Group by medicine name and count providers
+    const meds = {};
+    snap.forEach(d => {
+      const dat  = d.data();
+      const name = (dat.item || "Unknown").toUpperCase();
+      if (!meds[name]) meds[name] = { count:0, active:0 };
+      meds[name].count++;
+      if (dat.isEligible) meds[name].active++;
+    });
+
+    const entries = Object.entries(meds)
+      .sort((a,b) => b[1].count - a[1].count)
+      .slice(0, 8);
+
+    el.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:8px;padding:12px 16px;">
+        ${entries.map(([name, data]) => {
+          const pct     = Math.round((data.active / data.count) * 100);
+          const barCls  = pct === 0 ? "crit" : pct < 50 ? "low" : "ok";
+          const label   = pct === 0 ? "None Active" : pct < 50 ? "Limited" : "Available";
+          return `
+            <div style="padding:10px 12px;background:var(--surface3);border:1px solid var(--border);border-radius:var(--r,4px);">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <div style="font-size:12px;color:var(--text);font-weight:500;">
+                  💊 ${name.length > 18 ? name.slice(0,18)+"…" : name}
+                </div>
+                <div style="font-size:10px;color:var(--muted2);">${data.active}/${data.count} active</div>
+              </div>
+              <div class="inv-bar">
+                <div class="inv-fill ${barCls}" style="width:${pct}%"></div>
+              </div>
+              <div style="display:flex;justify-content:space-between;margin-top:4px;">
+                <div class="inv-status ${barCls}" style="font-size:9px;">${label}</div>
+                <div style="font-size:9px;color:var(--muted);">${pct}% available</div>
+              </div>
+            </div>`;
+        }).join("")}
+      </div>`;
+  } catch(e) {
+    el.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div>Error: ${e.message}</div>`;
+  }
+}
+
+window.refreshMedInv = () => { loadMedInvDash(); toast("Medicine inventory refreshed","info"); };
 
 // ── VERIFY QUEUE ─────────────────────────────────────
 let allDonorDocs = [];
@@ -1525,12 +1672,19 @@ window.showView = (name, navEl)=>{
   if(VIEW_ON_OPEN[name]) VIEW_ON_OPEN[name]();
 };
 
-window.doLogout = ()=>{ localStorage.removeItem("ls_role"); localStorage.removeItem("ls_email"); location.href="login.html?logout=1"; };
+window.doLogout = () => {
+  localStorage.removeItem("ls_role");
+  localStorage.removeItem("ls_email");
+  localStorage.removeItem("ls_admin_authed");
+  localStorage.removeItem("ls_admin_verified_at");
+  location.href = "login.html?logout=1";
+};
 
 // ── INIT ──────────────────────────────────────────────
 renderInv("inv-grid-dash");
 loadStats();
 loadMapData();
+loadMedInvDash();
 
 // Load verify queue for dashboard
 loadDonors().then(docs=>{

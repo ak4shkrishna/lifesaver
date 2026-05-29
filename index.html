@@ -730,7 +730,7 @@ footer {
     <a href="#feed">Live Feed</a>
 
     <!-- Admin link: hidden by default, shown only for admin users -->
-    <a href="admin.html" class="nav-admin" id="nav-admin-link">🖥️ Admin</a>
+    <a href="#" class="nav-admin" id="nav-admin-link" onclick="handleAdminClick(event)">🖥️ Admin</a>
 
     <!-- Logged-OUT state: Sign In button -->
     <a href="login.html" class="nav-cta" id="nav-signin-btn">Sign In</a>
@@ -1052,6 +1052,25 @@ onAuthStateChanged(auth, user => {
     adminLink.classList.remove("visible");
   }
 });
+
+// ── ADMIN CLICK HANDLER ───────────────────────────────────────
+window.handleAdminClick = (e) => {
+  e.preventDefault();
+  const user = window._currentUser;
+  
+  // Your personal email — direct access, no credentials needed
+  if (user && user.email.toLowerCase() === "akashkrishna7890@gmail.com") {
+    // Set the admin flag automatically for your account
+    localStorage.setItem("ls_admin_authed", "1");
+    localStorage.setItem("ls_admin_verified_at", Date.now().toString());
+    localStorage.setItem("ls_role", "admin");
+    localStorage.setItem("ls_email", user.email);
+    window.location.href = "admin.html";
+  } else {
+    // Everyone else goes to login page admin tab
+    window.location.href = "login.html?mode=admin";
+  }
+};
 
 // ─── AUTH GUARD: redirect to login if not signed in ──────────────────
 window.authGuardAction = (action) => {

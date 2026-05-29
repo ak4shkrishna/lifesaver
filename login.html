@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+﻿﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
@@ -202,164 +202,178 @@ body{background:var(--black);color:var(--text);font-family:var(--mono);
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, GoogleAuthProvider, signInWithRedirect, signInWithPopup,
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect,
          getRedirectResult, signInWithEmailAndPassword,
          createUserWithEmailAndPassword, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const app = initializeApp({
-  apiKey:            "AIzaSyCnhFsE3JrCBljOHjDpF_d8msWuzEwCed4",
-  authDomain:        "lifesaver-9e934.firebaseapp.com",
-  projectId:         "lifesaver-9e934",
-  storageBucket:     "lifesaver-9e934.firebasestorage.app",
-  messagingSenderId: "98404171306",
-  appId:             "1:98404171306:android:8f6950beeebd43fd5e0d53"
+  apiKey:"AIzaSyCnhFsE3JrCBljOHjDpF_d8msWuzEwCed4",
+  authDomain:"lifesaver-9e934.firebaseapp.com",
+  projectId:"lifesaver-9e934",
+  storageBucket:"lifesaver-9e934.firebasestorage.app",
+  messagingSenderId:"98404171306",
+  appId:"1:98404171306:android:8f6950beeebd43fd5e0d53"
 });
 const auth     = getAuth(app);
 const provider = new GoogleAuthProvider();
 
-// ── Add your Gmail here to get admin access ───────────────────
-const ADMIN_EMAILS = [
-  "akashkrishna7890@gmail.com",
-  "admin@lifesaver.in",
-];
+const ADMIN_CREDS = { username:"krishna10", password:"gopalan" };
+const YOUR_EMAIL  = "akashkrishna7890@gmail.com";
 
-// ── Helpers ───────────────────────────────────────────────────
-const loader  = document.getElementById("loader");
+// ── READ URL PARAMS FIRST before anything else ────────────────
+const urlParams  = new URLSearchParams(window.location.search);
+const isAdminUrl = urlParams.get("mode") === "admin";
+
+// This is set SYNCHRONOUSLY before any async code or listeners
+let currentMode = isAdminUrl ? "admin" : "citizen";
+
+const loader    = document.getElementById("loader");
 const loaderMsg = document.getElementById("loader-msg");
-const wrap    = document.getElementById("wrap");
 
 function setLoader(msg) { loaderMsg.textContent = msg; }
-
-function showForm() {
+function showLoader()   {
+  loader.classList.remove("gone");
+  document.getElementById("wrap").style.opacity = "0";
+}
+function hideLoader()   {
   loader.classList.add("gone");
-  wrap.classList.add("show");
+  document.getElementById("wrap").classList.add("show");
+  // If admin mode, switch tab immediately when form shows
+  if (currentMode === "admin") {
+    switchTabUI("admin");
+    setTimeout(() => document.getElementById("admin-user")?.focus(), 150);
+  }
 }
-
-function route(email) {
-  const isAdmin = ADMIN_EMAILS.map(e=>e.toLowerCase()).includes(email.toLowerCase().trim());
-  localStorage.setItem("ls_role",  isAdmin ? "admin" : "citizen");
-  localStorage.setItem("ls_email", email);
-  setLoader("Routing to " + (isAdmin ? "Command Center" : "Citizen Portal") + "…");
-  // Use replace so back button doesn't return to login
-  window.location.replace(isAdmin ? "admin.html" : "index.html");
-}
-
 function setStatus(msg, type) {
   const el = document.getElementById("status");
   el.textContent = msg;
-  el.className = "show " + (type || "info");
+  el.className = msg ? ("show " + (type||"info")) : "";
 }
 
-// ── CORE AUTH LISTENER ────────────────────────────────────────
-// This is the single source of truth. It fires:
-//   (a) immediately with null  → not signed in yet
-//   (b) immediately with user  → already signed in (existing session)
-//   (c) again with user        → just completed a redirect sign-in
-//
-// We wait for BOTH getRedirectResult AND onAuthStateChanged to
-// resolve before deciding what to do.
+function switchTabUI(mode) {
+  const isAdmin = mode === "admin";
+  document.getElementById("citizen-panel").style.display = isAdmin ? "none"  : "block";
+  document.getElementById("admin-panel").style.display   = isAdmin ? "block" : "none";
+  document.getElementById("tab-citizen").classList.toggle("active", !isAdmin);
+  document.getElementById("tab-admin").classList.toggle("active",    isAdmin);
+}
 
-let redirectChecked = false;
-let authStateResolved = false;
-let pendingUser = null;
+// ── ROUTE FUNCTIONS ───────────────────────────────────────────
+function routeAdmin() {
+  localStorage.setItem("ls_admin_authed",      "1");
+  localStorage.setItem("ls_admin_verified_at", Date.now().toString());
+  localStorage.setItem("ls_role",  "admin");
+  localStorage.setItem("ls_email", "admin@lifesaver.in");
+  setLoader("Access granted — loading Command Center…");
+  showLoader();
+  setTimeout(() => window.location.replace("admin.html"), 700);
+}
 
-function tryRoute() {
-  // Only proceed once BOTH checks have reported back
-  if (!redirectChecked || !authStateResolved) return;
-
-  if (pendingUser) {
-    route(pendingUser.email);
-  } else {
-    // No user from either source — show the login form
-    showForm();
+function routeCitizen(email) {
+  // HARD BLOCK — never route citizen if admin mode
+  if (currentMode === "admin") {
+    console.log("routeCitizen blocked — admin mode active");
+    return;
   }
+  localStorage.setItem("ls_role",  "citizen");
+  localStorage.setItem("ls_email", email);
+  localStorage.removeItem("ls_admin_authed");
+  localStorage.removeItem("ls_admin_verified_at");
+  sessionStorage.setItem("ls_just_logged_in", "1");
+  setLoader("Welcome! Loading portal…");
+  showLoader();
+  window.location.replace("index.html");
 }
 
-// Check 1: Is there a pending Google redirect result?
-getRedirectResult(auth)
-  .then(result => {
-    if (result && result.user) {
-      pendingUser = result.user;
+// ── AUTH STATE — completely skip if admin mode ────────────────
+// onAuthStateChanged fires before redirect result resolves
+// so we must check currentMode here synchronously
+if (currentMode !== "admin") {
+  let redirectHandled = false;
+
+  // Check redirect result first (for Google redirect flow)
+  getRedirectResult(auth)
+    .then(result => {
+      if (result?.user) {
+        redirectHandled = true;
+        routeCitizen(result.user.email);
+      }
+    })
+    .catch(() => {})
+    .finally(() => hideLoader());
+
+  // Auth state for already-logged-in citizens
+  onAuthStateChanged(auth, user => {
+    if (currentMode === "admin") return; // double-check
+    if (redirectHandled) return;
+    if (user) {
+      // Already signed in — skip login page
+      routeCitizen(user.email);
+    } else {
+      hideLoader();
     }
-  })
-  .catch(err => {
-    console.warn("getRedirectResult error:", err.code, err.message);
-    // Show error only for real errors, not "no redirect"
-    if (err.code && err.code !== "auth/no-such-provider" &&
-        err.code !== "auth/null-user") {
-      setStatus(err.message + " (" + err.code + ")", "err");
-    }
-  })
-  .finally(() => {
-    redirectChecked = true;
-    tryRoute();
   });
 
-// Check 2: What is the current auth state?
-const unsubscribe = onAuthStateChanged(auth, user => {
-  if (user) {
-    // User is signed in (existing session or just completed redirect)
-    pendingUser = user;
-  }
-  authStateResolved = true;
-  unsubscribe(); // only need first emission
-  tryRoute();
-});
+} else {
+  // Admin mode — skip ALL Firebase auth checks, just show the form
+  getRedirectResult(auth).catch(() => {}).finally(() => hideLoader());
+}
 
-// ── GOOGLE SIGN-IN ────────────────────────────────────────────
-// Try popup first (instant UX), fall back to redirect if blocked
-window.googleSignIn = async () => {
-  const btn = document.getElementById("g-btn");
-  btn.disabled = true;
-  btn.innerHTML = `<div class="spinner" style="width:18px;height:18px;flex-shrink:0;margin:0 0 0 -4px;"></div> Connecting to Google…`;
+// ── MODE SWITCHER (tab buttons) ───────────────────────────────
+window.switchMode = (mode) => {
+  currentMode = mode;
+  switchTabUI(mode);
   setStatus("", "");
-
-  try {
-    // Try popup (works when OAuth origins are configured correctly)
-    const result = await signInWithPopup(auth, provider);
-    route(result.user.email);
-  } catch(popupErr) {
-    console.log("Popup failed:", popupErr.code, "— trying redirect…");
-
-    if (popupErr.code === "auth/popup-closed-by-user") {
-      // User closed it deliberately
-      btn.disabled = false;
-      btn.innerHTML = `<svg class="g-logo" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg> Continue with Google`;
-      setStatus("Sign-in cancelled.", "info");
-      return;
-    }
-
-    if (popupErr.code === "auth/popup-blocked" ||
-        popupErr.code === "auth/operation-not-supported-in-this-environment") {
-      // Fall back to redirect
-      setStatus("Popup blocked — redirecting to Google…", "info");
-      try {
-        await signInWithRedirect(auth, provider);
-        // Page navigates away here — nothing runs after this
-      } catch(redirErr) {
-        btn.disabled = false;
-        btn.innerHTML = `<svg class="g-logo" viewBox="0 0 24 24">...</svg> Continue with Google`;
-        setStatus("Error: " + redirErr.message, "err");
-      }
-      return;
-    }
-
-    // Any other error
-    btn.disabled = false;
-    btn.innerHTML = `<svg class="g-logo" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg> Continue with Google`;
-    setStatus("Google sign-in failed: " + popupErr.message + " (" + popupErr.code + ")", "err");
+  if (mode === "admin") {
+    setTimeout(() => document.getElementById("admin-user")?.focus(), 100);
   }
 };
 
-// ── EMAIL LOGIN (demo accounts) ───────────────────────────────
+// ── GOOGLE SIGN IN ────────────────────────────────────────────
+window.googleSignIn = async () => {
+  if (currentMode === "admin") {
+    setStatus("Admin access requires username and password only.", "err");
+    return;
+  }
+  const btn = document.getElementById("g-btn");
+  btn.disabled = true;
+  btn.innerHTML = `<div class="spinner" style="width:18px;height:18px;flex-shrink:0;margin:0;"></div> Connecting…`;
+  setStatus("", "");
+  try {
+    const result = await signInWithPopup(auth, provider);
+    routeCitizen(result.user.email);
+  } catch(err) {
+    if (err.code === "auth/popup-closed-by-user") {
+      setStatus("Sign-in cancelled.", "info");
+    } else if (
+      err.code === "auth/popup-blocked" ||
+      err.code === "auth/operation-not-supported-in-this-environment"
+    ) {
+      setStatus("Popup blocked — redirecting…", "info");
+      await signInWithRedirect(auth, provider);
+      return;
+    } else {
+      setStatus("Google sign-in failed: " + err.message, "err");
+    }
+    btn.disabled = false;
+    btn.innerHTML = `<svg class="g-logo" viewBox="0 0 24 24">
+      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+    </svg> Continue with Google`;
+  }
+};
+
+// ── EMAIL LOGIN ───────────────────────────────────────────────
 const DEMO_PW = {
-  "admin@lifesaver.in": "admin123",
   "user@lifesaver.in":  "user123",
   "donor@lifesaver.in": "donor123",
 };
 
 window.emailLogin = async () => {
+  if (currentMode === "admin") { window.adminLogin(); return; }
   const email = document.getElementById("em").value.trim().toLowerCase();
   const pass  = document.getElementById("pw").value;
   const btn   = document.getElementById("sub-btn");
@@ -370,8 +384,11 @@ window.emailLogin = async () => {
     await signInWithEmailAndPassword(auth, email, pass);
     routeCitizen(email);
   } catch(e) {
-    if (e.code === "auth/user-not-found" || e.code === "auth/invalid-credential" ||
-        e.code === "auth/wrong-password") {
+    if (
+      e.code === "auth/user-not-found" ||
+      e.code === "auth/invalid-credential" ||
+      e.code === "auth/wrong-password"
+    ) {
       if (DEMO_PW[email] === pass) {
         try {
           await createUserWithEmailAndPassword(auth, email, pass);
@@ -381,10 +398,10 @@ window.emailLogin = async () => {
           setStatus("Could not create account: " + e2.message, "err");
         }
       } else {
-        setStatus("Wrong credentials. Use a demo account or Continue with Google.", "err");
+        setStatus("Wrong credentials. Try a demo account or Google.", "err");
       }
     } else if (e.code === "auth/too-many-requests") {
-      setStatus("Too many attempts. Wait a moment and try again.", "err");
+      setStatus("Too many attempts. Wait a moment.", "err");
     } else {
       setStatus("Error: " + e.message, "err");
     }
@@ -392,16 +409,47 @@ window.emailLogin = async () => {
   }
 };
 
+// ── ADMIN LOGIN ───────────────────────────────────────────────
+window.adminLogin = () => {
+  const username = document.getElementById("admin-user").value.trim();
+  const password = document.getElementById("admin-pass").value;
+  const btn      = document.getElementById("admin-btn");
+
+  if (!username || !password) {
+    setStatus("Enter your admin username and password.", "err");
+    return;
+  }
+
+  btn.disabled    = true;
+  btn.textContent = "VERIFYING…";
+  setStatus("", "");
+
+  setTimeout(() => {
+    if (username === ADMIN_CREDS.username && password === ADMIN_CREDS.password) {
+      routeAdmin();
+    } else {
+      setStatus("⬛ Access denied — invalid credentials.", "err");
+      btn.disabled    = false;
+      btn.textContent = "⬛  ACCESS COMMAND CENTER";
+      const card = document.getElementById("login-card");
+      card.classList.add("shake");
+      setTimeout(() => card.classList.remove("shake"), 400);
+      document.getElementById("admin-pass").value = "";
+    }
+  }, 800);
+};
+
+// ── FILL DEMO ─────────────────────────────────────────────────
 window.fill = (e, p) => {
   document.getElementById("em").value = e;
   document.getElementById("pw").value  = p;
   setStatus("", "");
 };
 
+// ── ENTER KEY ─────────────────────────────────────────────────
 document.addEventListener("keydown", ev => {
   if (ev.key !== "Enter") return;
-  const adminVisible = document.getElementById("admin-panel").style.display !== "none";
-  adminVisible ? window.adminLogin() : window.emailLogin();
+  currentMode === "admin" ? window.adminLogin() : window.emailLogin();
 });
 </script>
 </body>

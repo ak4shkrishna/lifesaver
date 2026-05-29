@@ -114,11 +114,26 @@ server.on('upgrade', async (req, socket, head) => {
             'x-wifi-rssi': rssi,
             'x-device-mac': deviceMac,
         } = req.headers;
-        authToken = authHeader?.replace('Bearer ', '') ?? '';
+
+        // ── TOKEN EXTRACTION ────────────────────────────────────────
+        // Browsers cannot send custom headers during a WebSocket handshake,
+        // so the web widget passes the token as a URL query param (?token=XYZ).
+        // Hardware clients (ESP32) continue to use the Authorization header.
+        // We check the header first, then fall back to the query string.
+        let tokenFromQuery = '';
+        if (req.url) {
+            // req.url is a path like "/?token=XYZ", so we need a base to parse it
+            const urlObj = new URL(req.url, 'http://localhost');
+            tokenFromQuery = urlObj.searchParams.get('token') ?? '';
+        }
+
+        authToken = authHeader?.replace('Bearer ', '') || tokenFromQuery;
+
         const wifiStrength = parseInt(rssi as string); // Convert to number
 
         // You can now use wifiStrength in your code
         console.log('WiFi RSSI:', wifiStrength); // Will log something like -50
+        console.log('Auth source:', authHeader ? 'header' : 'query param');
 
         // Remove debug logging
         if (!authToken) {

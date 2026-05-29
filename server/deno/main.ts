@@ -44,8 +44,14 @@ wss.on('connection', async (ws: WSWebSocket, payload: IPayload) => {
         user.personality?.key ?? null,
         false,
     );
-    const firstMessage = createFirstMessage(payload);
-    const systemPrompt = createSystemPrompt(chatHistory, payload);
+    const firstMessage = `Lifesaver online. How can I help?`;
+    const systemPrompt = `You are LIFESAVER AI, an emergency response assistant for a blood and medicine donor network in Bengaluru, India.
+You help hospital staff and citizens with:
+- Finding blood donors by blood type (say "find O positive donors")
+- Finding medicine providers (say "find insulin providers")
+- Broadcasting emergency SOS alerts (say "broadcast SOS for O negative blood at City Hospital high urgency")
+Always be calm, fast and clear. Keep responses under 2 sentences since this is a voice device.
+Start every session by saying: Lifesaver online. How can I help?`;
 
     const provider = user.personality?.provider;
 

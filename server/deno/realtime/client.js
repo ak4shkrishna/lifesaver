@@ -194,18 +194,21 @@ export class RealtimeClient extends RealtimeEventHandler {
     constructor({ url, apiKey, dangerouslyAllowAPIKeyInBrowser, debug } = {}) {
         super();
         this.defaultSessionConfig = {
-            modalities: ['text', 'audio'],
-            instructions: '',
-            voice: 'verse',
-            input_audio_format: 'pcm16',
-            output_audio_format: 'pcm16',
-            input_audio_transcription: null,
-            turn_detection: null,
-            tools: [],
-            tool_choice: 'auto',
-            temperature: 0.8,
-            max_response_output_tokens: 4096,
-        };
+    instructions: '',
+    voice: 'verse',
+    input_audio_format: 'pcm16',
+    output_audio_format: 'pcm16',
+    input_audio_transcription: { model: 'whisper-1' },
+    turn_detection: {
+        type: 'server_vad',
+        threshold: 0.4,
+        prefix_padding_ms: 400,
+        silence_duration_ms: 1000,
+    },
+    tool_choice: 'auto',
+    temperature: 0.8,
+    max_response_output_tokens: 4096,
+};
         this.sessionConfig = {};
         this.transcriptionModels = [
             {
@@ -295,7 +298,8 @@ export class RealtimeClient extends RealtimeEventHandler {
                     throw new Error(`Tool "${tool.name}" has not been added`);
                 }
                 const result = await toolConfig.handler(jsonArguments);
-                this.realtime.send('conversation.item.create', {
+console.log('Tool result:', JSON.stringify(result));
+this.realtime.send('conversation.item.create', {
                     item: {
                         type: 'function_call_output',
                         call_id: tool.call_id,
@@ -352,14 +356,22 @@ export class RealtimeClient extends RealtimeEventHandler {
             handlerWithDispatch,
         );
         this.realtime.on('server.response.output_item.done', async (event) => {
-            const { item } = handlerWithDispatch(event);
-            if (item && item.status === "completed") {
-                this.dispatch('conversation.item.completed', { item });
-            }
-            if (item && item.formatted && item.formatted.tool) {
-                callTool(item.formatted.tool);
-            }
+    const { item } = handlerWithDispatch(event);
+    if (item && item.status === "completed") {
+        this.dispatch('conversation.item.completed', { item });
+    }
+    // Check both formatted.tool and raw item type
+    if (item && item.formatted && item.formatted.tool) {
+        callTool(item.formatted.tool);
+    } else if (event.item && event.item.type === 'function_call' && event.item.status === 'completed') {
+        callTool({
+            type: 'function',
+            name: event.item.name,
+            call_id: event.item.call_id,
+            arguments: event.item.arguments,
         });
+    }
+});
 
         return true;
     }
@@ -547,11 +559,19 @@ export class RealtimeClient extends RealtimeEventHandler {
             }),
         );
         const session = { type: 'realtime', ...this.sessionConfig };
-        session.tools = useTools;
-        if (this.realtime.isConnected()) {
-            this.realtime.send('session.update', { session });
-        }
-        return true;
+delete session.modalities;
+delete session.voice;
+delete session.input_audio_format;
+delete session.output_audio_format;
+delete session.temperature;
+delete session.max_response_output_tokens;
+delete session.input_audio_transcription;
+delete session.turn_detection;
+session.tools = useTools;
+if (this.realtime.isConnected()) {
+    this.realtime.send('session.update', { session });
+}
+return true;
     }
 
     /**

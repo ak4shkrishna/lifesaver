@@ -194,7 +194,9 @@ item.content.push(part);
                 return { item: null, delta: null };
             }
             item.content[content_index].transcript += delta;
-            item.formatted.transcript += delta;
+           if (item.formatted.tool) {
+    if (item.formatted.tool) { if (item.formatted.tool) { item.formatted.tool.arguments += delta; } }
+}
             return { item, delta: { transcript: delta } };
         },
         'response.audio.delta': (event) => {
@@ -230,7 +232,7 @@ item.content.push(part);
                 return { item: null, delta: null };
             }
             item.arguments += delta;
-            item.formatted.tool.arguments += delta;
+            if (item.formatted.tool) { if (item.formatted.tool) { item.formatted.tool.arguments += delta; } }
             return { item, delta: { arguments: delta } };
         },
     };

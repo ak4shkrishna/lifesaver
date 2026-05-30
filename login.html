@@ -270,7 +270,7 @@ function routeAdmin() {
   setTimeout(() => window.location.replace("admin.html"), 700);
 }
 
-function routeCitizen(email) {
+async function routeCitizen(email) {
   // HARD BLOCK — never route citizen if admin mode
   if (currentMode === "admin") {
     console.log("routeCitizen blocked — admin mode active");
@@ -280,6 +280,8 @@ function routeCitizen(email) {
   localStorage.setItem("ls_email", email);
   localStorage.removeItem("ls_admin_authed");
   localStorage.removeItem("ls_admin_verified_at");
+  const token = await auth.currentUser.getIdToken(true);
+  localStorage.setItem("ls_firebase_token", token);
   sessionStorage.setItem("ls_just_logged_in", "1");
   setLoader("Welcome! Loading portal…");
   showLoader();
@@ -312,6 +314,14 @@ if (currentMode !== "admin") {
       routeCitizen(user.email);
     } else {
       hideLoader();
+    }
+  });
+
+  // Auto-refresh token every 55 min
+  auth.onIdTokenChanged(async (user) => {
+    if (user) {
+      const token = await user.getIdToken(true);
+      localStorage.setItem("ls_firebase_token", token);
     }
   });
 

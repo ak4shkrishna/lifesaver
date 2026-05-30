@@ -3,8 +3,12 @@
  * Connects to ElatoAI Deno server via WebSocket
  * Streams PCM16 audio in both directions (same protocol as ESP32)
  * 
+ * Auth: Browsers cannot send custom headers during a WebSocket handshake,
+ * so the Supabase access_token is passed as ?token=XYZ in the WS URL.
+ * The token is read from localStorage (set by login.html after Supabase auth).
+ * 
  * Usage: add <script src="voice-widget.js"></script> before </body>
- * Then call: new LifesaverVoice('ws://10.111.187.209:8787')
+ * Then call: new LifesaverVoice('ws://10.111.187.209:8000')
  */
 
 (function () {
@@ -354,11 +358,11 @@
         <div id="ls-status-row">
           <div id="ls-status-dot"></div>
           <div id="ls-status-text">Not connected</div>
-        </div>
+      </div>
       </div>
       <div id="ls-panel-body">
         <div id="ls-ws-row">
-          <input id="ls-ws-input" type="text" value="ws://10.111.187.209:8787" spellcheck="false"/>
+          <input id="ls-ws-input" type="text" value="ws://10.111.187.209:8000" spellcheck="false"/>
           <button id="ls-connect-btn" onclick="window._lsVoice.toggleConnect()">Connect</button>
         </div>
         <div id="ls-visualizer">
@@ -381,10 +385,94 @@
     </button>
   `;
 
+  // ── TOKEN HELPER ────────────────────────────────────────────────
+  // Browsers cannot inject custom headers into a WebSocket handshake.
+  // We pass the Supabase access_token as a URL query param instead.
+  // The token is stored in localStorage by the Supabase auth flow in login.html.
+  async function getFreshAuthToken() {
+    // Find the Supabase session key
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
+        try {
+          const session = JSON.parse(localStorage.getItem(key) || '{}');
+          const expires = session?.expires_at;
+          const refreshToken = session?.refresh_token;
+
+          // If expired or expiring within 5 minutes, refresh it
+          if (refreshToken && expires && (expires - Date.now()/1000) < 300) {
+            console.log('[LifesaverVoice] Token expired/expiring, refreshing via Supabase...');
+            
+            // Call Supabase refresh endpoint directly
+            const projectRef = key.replace('sb-', '').replace('-auth-token', '');
+            const res = await fetch(`https://${projectRef}.supabase.co/auth/v1/token?grant_type=refresh_token`, {
+              method: 'POST',
+              headers: { 
+                'Content-Type': 'application/json',
+                
+                'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmanN0ZmZhanVrbnpkdGZyY2VoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5NjUxOTcsImV4cCI6MjA5NTU0MTE5N30.HMjrNCObQzUkl3WuppIljYm4trTlS_OjJr0eKgEuqHg'
+              },
+              body: JSON.stringify({ refresh_token: refreshToken }),
+            });
+
+            if (res.ok) {
+              const newSession = await res.json();
+              // Save updated session back to localStorage
+              localStorage.setItem(key, JSON.stringify({
+                ...session,
+                access_token:  newSession.access_token,
+                refresh_token: newSession.refresh_token,
+                expires_at:    newSession.expires_at,
+              }));
+              console.log('[LifesaverVoice] Token refreshed successfully');
+              return newSession.access_token;
+            } else {
+              console.error('[LifesaverVoice] Refresh failed:', await res.text());
+            }
+          }
+
+          // Token is still valid
+          const token = session?.access_token;
+          if (token) return token;
+        } catch (e) {
+          console.error('[LifesaverVoice] Token parse error:', e);
+        }
+      }
+    }
+    return getAuthToken();
+  }
+
+  function getAuthToken() {
+    // 1. Try Supabase's own localStorage key (supabase.auth.token or sb-*-auth-token)
+    //    Supabase JS v2 stores the session under a key like "sb-<project>-auth-token"
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('sb-') && key.endsWith('-auth-token'))) {
+        try {
+          const session = JSON.parse(localStorage.getItem(key) || '{}');
+          const token = session?.access_token || session?.currentSession?.access_token;
+          if (token) return token;
+        } catch (_) {}
+      }
+    }
+    // 2. Fallback: plain key set manually by login.html
+    const plain = localStorage.getItem('sb_access_token') || localStorage.getItem('ls_access_token');
+    if (plain) return plain;
+
+    return null;
+  }
+
+  // Append ?token=XYZ to a ws:// URL (preserves any existing query params)
+  function buildAuthUrl(baseUrl, token) {
+    if (!token) return baseUrl;
+    const separator = baseUrl.includes('?') ? '&' : '?';
+    return `${baseUrl}${separator}token=${encodeURIComponent(token)}`;
+  }
+
   // ── MAIN CLASS ──────────────────────────────────────────────────
   class LifesaverVoice {
     constructor(wsUrl) {
-      this.wsUrl       = wsUrl || 'ws://10.111.187.209:8787';
+      this.wsUrl       = wsUrl || 'ws://10.111.187.209:8000';
       this.ws          = null;
       this.audioCtx    = null;
       this.mediaStream = null;
@@ -462,38 +550,46 @@
       }
     }
 
-    _connect() {
+    async _connect() {
+      const token = await getFreshAuthToken();
+      const authUrl = buildAuthUrl(this.wsUrl, token);
+      
       this._setStatus('connecting', 'Connecting…');
       document.getElementById('ls-connect-btn').textContent = 'Cancel';
+
       try {
-        this.ws = new WebSocket(this.wsUrl);
-        this.ws.binaryType = 'arraybuffer';
+        this.ws = new WebSocket(authUrl);
 
         this.ws.onopen = () => {
           this.isConnected = true;
-          this._setStatus('connected', 'Connected — hold mic to speak');
+          this._setStatus('connected', 'Monitoring ESP32 session…');
           document.getElementById('ls-connect-btn').textContent = 'Disconnect';
-          document.getElementById('ls-mic-btn').classList.remove('disabled');
-          this._addMessage('system', '🟢 Connected to Lifesaver AI');
-          console.log('[LifesaverVoice] WebSocket connected to', this.wsUrl);
+          this._addMessage('system', '🟢 Connected — listening to ESP32');
         };
 
-        this.ws.onmessage = (e) => this._handleMessage(e);
+        this.ws.onmessage = (e) => {
+          try {
+            const msg = JSON.parse(e.data);
+            if (msg.type === 'user_transcript' && msg.text) {
+              this._addMessage('user', msg.text);
+            } else if (msg.type === 'ai_transcript' && msg.text) {
+              this._addMessage('ai', msg.text);
+            }
+            // ignore all other messages (auth, RESPONSE.CREATED, etc)
+          } catch(_) {}
+        };
 
-        this.ws.onerror = (err) => {
-          console.error('[LifesaverVoice] WebSocket error', err);
+        this.ws.onerror = () => {
           this._setStatus('', 'Connection error');
-          this._addMessage('system', '⚠ Connection error. Check server IP.');
+          this._addMessage('system', '⚠ Connection error');
         };
 
         this.ws.onclose = () => {
           this.isConnected = false;
-          this._stopListening();
           this._setStatus('', 'Disconnected');
           document.getElementById('ls-connect-btn').textContent = 'Connect';
           document.getElementById('ls-mic-btn').classList.add('disabled');
           this._addMessage('system', '⬛ Disconnected');
-          console.log('[LifesaverVoice] WebSocket closed');
         };
 
       } catch(e) {
@@ -640,6 +736,14 @@
     // ── AUDIO PLAYBACK ─────────────────────────────────────────
     _enqueueAudio(arrayBuffer) {
       this.playbackQueue.push(arrayBuffer);
+      // Int16Array requires even byte length — pad if needed
+      let buf = arrayBuffer;
+      if (buf.byteLength % 2 !== 0) {
+        const padded = new ArrayBuffer(buf.byteLength + 1);
+        new Uint8Array(padded).set(new Uint8Array(buf));
+        buf = padded;
+      }
+      this.playbackQueue.push(buf);
       if (!this.isPlayingAudio) this._drainQueue();
     }
 
@@ -663,7 +767,13 @@
 
       while (this.playbackQueue.length > 0) {
         const chunk = this.playbackQueue.shift();
-        const pcm16 = new Int16Array(chunk);
+        let safeChunk = chunk;
+        if (chunk.byteLength % 2 !== 0) {
+          const padded = new ArrayBuffer(chunk.byteLength + 1);
+          new Uint8Array(padded).set(new Uint8Array(chunk));
+          safeChunk = padded;
+        }
+        const pcm16 = new Int16Array(safeChunk);
         const float32 = new Float32Array(pcm16.length);
         for (let i = 0; i < pcm16.length; i++) {
           float32[i] = pcm16[i] / (pcm16[i] < 0 ? 0x8000 : 0x7FFF);
@@ -801,7 +911,7 @@
   // ── BOOT ────────────────────────────────────────────────────────
   // Auto-init when DOM is ready
   function init() {
-    const wsUrl = window._lsVoiceUrl || 'ws://10.111.187.209:8787';
+    const wsUrl = window._lsVoiceUrl || 'ws://10.111.187.209:8000';
     window._lsVoice = new LifesaverVoice(wsUrl);
     console.log('[LifesaverVoice] Ready. Open the widget bottom-right ↘');
   }

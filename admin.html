@@ -1,0 +1,1701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>LIFESAVER — Command Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{
+  --red:#FF4444;--red2:#FF6B6B;--red-dim:rgba(255,68,68,0.1);--red-glow:rgba(255,68,68,0.22);
+  --orange:#FF9500;--orange-dim:rgba(255,149,0,0.12);
+  --aqua:#00D4FF;--aqua-dim:rgba(0,212,255,0.08);
+  --green:#00E676;--green-dim:rgba(0,230,118,0.08);
+  --black:#0A0A0F;--surface:#111117;--surface2:#16161E;--surface3:#1C1C26;--surface4:#22222E;
+  --border:rgba(255,255,255,0.05);--border2:rgba(255,255,255,0.09);
+  --text:#F0EEF8;--muted:#4A4A5E;--muted2:#8A8AA0;
+  --mono:'DM Mono',monospace;--display:'Bebas Neue',sans-serif;
+  --sidebar-w:224px;--r:6px;--r-lg:10px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;overflow:hidden;}
+body{background:var(--black);color:var(--text);font-family:var(--mono);font-size:13px;display:flex;flex-direction:column;}
+body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;opacity:0.02;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size:200px;}
+::-webkit-scrollbar{width:3px;height:3px;}
+::-webkit-scrollbar-track{background:var(--black);}
+::-webkit-scrollbar-thumb{background:var(--surface4);border-radius:2px;}
+
+/* TICKER */
+.ticker-bar{height:30px;flex-shrink:0;background:var(--red);display:flex;align-items:center;overflow:hidden;}
+.ticker-label{flex-shrink:0;padding:0 16px;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;
+  color:#fff;font-weight:500;background:rgba(0,0,0,0.3);height:100%;display:flex;align-items:center;gap:8px;
+  border-right:1px solid rgba(255,255,255,0.2);z-index:2;}
+.ticker-dot{width:5px;height:5px;border-radius:50%;background:#fff;animation:blink 1s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+.ticker-scroll{display:flex;animation:ticker 35s linear infinite;white-space:nowrap;}
+.ticker-item{padding:0 40px;font-size:10px;letter-spacing:0.15em;text-transform:uppercase;
+  color:rgba(255,255,255,0.9);display:inline-flex;align-items:center;gap:16px;}
+.ticker-item::after{content:'◆';opacity:0.5;font-size:7px;}
+@keyframes ticker{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+/* SHELL */
+.shell{flex:1;display:flex;overflow:hidden;}
+
+/* SIDEBAR */
+.sidebar{width:var(--sidebar-w);flex-shrink:0;background:var(--surface);border-right:1px solid var(--border2);
+  display:flex;flex-direction:column;overflow-y:auto;}
+.sidebar-brand{padding:20px 20px 16px;border-bottom:1px solid var(--border);}
+.sidebar-logo{font-family:var(--display);font-size:20px;letter-spacing:3px;display:flex;align-items:center;gap:8px;}
+.sidebar-logo span{color:var(--red);}
+.sidebar-role{font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--aqua);margin-top:4px;}
+.sidebar-nav{flex:1;padding:12px 0;}
+.nav-group-label{padding:10px 20px 6px;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);}
+.nav-item{display:flex;align-items:center;gap:10px;margin:1px 10px;padding:9px 12px;cursor:pointer;font-size:12px;
+  color:var(--muted2);border-left:none !important;border-radius:var(--r);transition:all 0.2s;user-select:none;position:relative;}
+.nav-item:hover{color:var(--text);background:var(--surface2);}
+.nav-item.active{background:var(--red-dim);color:var(--red2);}
+.nav-item.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--red);border-radius:0 2px 2px 0;}
+.nav-item .badge{margin-left:auto;padding:2px 7px;border-radius:var(--r);font-size:9px;background:var(--red);color:#fff;}
+.nav-item .badge.aqua{background:var(--aqua);color:var(--black);}
+.sidebar-status{padding:16px 20px;border-top:1px solid var(--border);font-size:10px;}
+.status-row{display:flex;justify-content:space-between;margin-bottom:8px;color:var(--muted2);}
+.status-row span:last-child{color:var(--green);}
+
+/* MAIN */
+.main{flex:1;overflow:hidden;display:flex;flex-direction:column;}
+.main-header{padding:14px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;
+  justify-content:space-between;background:var(--surface);flex-shrink:0;}
+.main-title{font-family:var(--display);font-size:20px;letter-spacing:3px;color:var(--text);}
+.main-time{font-size:11px;color:var(--muted2);letter-spacing:0.08em;}
+.header-actions{display:flex;gap:8px;align-items:center;}
+.btn-sm{padding:7px 14px;font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;
+  border-radius:var(--r);cursor:pointer;border:1px solid var(--border2);background:var(--surface3);
+  color:var(--muted2);transition:all 0.2s;}
+.btn-sm:hover{color:var(--text);border-color:var(--text);}
+.btn-sm.danger{border-color:rgba(232,37,26,0.4);color:var(--red2);}
+.btn-sm.danger:hover{background:var(--red-dim);}
+
+/* VIEW CONTAINER — this scrolls */
+.view-container{flex:1;overflow-y:auto;overflow-x:hidden;}
+.view{display:none;padding:16px;min-height:100%;}
+.view.active{display:block;}
+
+/* KPI CARDS */
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px;}
+.kpi-card{padding:16px 18px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-lg);
+  display:flex;flex-direction:column;gap:6px;position:relative;overflow:hidden;transition:border-color 0.2s,transform 0.2s;}
+.kpi-card:hover{border-color:var(--border3);transform:translateY(-1px);}
+.kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
+.kpi-card.red::before{background:var(--red);}
+.kpi-card.aqua::before{background:var(--aqua);}
+.kpi-card.orange::before{background:var(--orange);}
+.kpi-card.green::before{background:var(--green);}
+.kpi-label{font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);}
+.kpi-value{font-family:var(--display);font-size:42px;line-height:1;color:var(--text);}
+.kpi-value.red{color:var(--red2);}
+.kpi-value.aqua{color:var(--aqua);}
+.kpi-value.orange{color:var(--orange);}
+.kpi-value.green{color:var(--green);}
+.kpi-sub{font-size:10px;color:var(--muted2);}
+.kpi-pulse{position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:24px;opacity:0.12;}
+
+/* TWO-COL ROW */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;}
+
+/* PANEL */
+.panel{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-lg);
+  display:flex;flex-direction:column;overflow:hidden;}
+.panel-header{padding:10px 16px;border-bottom:1px solid var(--border);display:flex;
+  align-items:center;justify-content:space-between;flex-shrink:0;}
+.panel-title{font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted2);}
+.panel-actions{display:flex;gap:6px;align-items:center;}
+.panel-body{padding:14px 16px;overflow-y:auto;}
+
+/* MAP */
+#cmd-map{width:100%;height:400px;}
+#fullmap-el{width:100%;height:calc(100vh - 160px);}
+.layer-btn{padding:4px 10px;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;
+  border:1px solid var(--border);border-radius:2px;cursor:pointer;background:transparent;
+  color:var(--muted);transition:all 0.2s;font-family:var(--mono);}
+.layer-btn.on{background:var(--aqua);color:var(--black);border-color:var(--aqua);}
+.layer-btn.on.red{background:var(--red);color:#fff;border-color:var(--red);}
+.layer-btn.on.orange{background:var(--orange);color:#fff;border-color:var(--orange);}
+
+/* BROADCAST */
+.toggle-group{display:flex;gap:6px;flex-wrap:wrap;}
+.toggle-chip{padding:5px 12px;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;
+  border:1px solid var(--border);border-radius:2px;cursor:pointer;background:transparent;
+  color:var(--muted);font-family:var(--mono);transition:all 0.2s;}
+.toggle-chip.a-red{background:var(--red-dim);color:var(--red2);border-color:rgba(232,37,26,0.4);}
+.toggle-chip.a-orange{background:var(--orange-dim);color:var(--orange);border-color:rgba(255,107,0,0.4);}
+.toggle-chip.a-aqua{background:var(--aqua-dim);color:var(--aqua);border-color:rgba(0,212,255,0.4);}
+.cmd-input{width:100%;padding:10px 12px;background:var(--surface3);border:1px solid var(--border);
+  border-radius:var(--r);color:var(--text);font-family:var(--mono);font-size:12px;outline:none;
+  transition:border-color 0.2s,box-shadow 0.2s;-webkit-appearance:none;margin-bottom:10px;}
+.cmd-input::placeholder{color:var(--muted);}
+.cmd-input:focus{border-color:var(--red);box-shadow:0 0 0 3px var(--red-dim);}
+.cmd-input option{background:var(--surface3);}
+.field-lbl{font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);
+  margin-bottom:4px;display:block;}
+.security-note{padding:8px 12px;background:var(--orange-dim);border:1px solid rgba(255,107,0,0.25);
+  border-radius:2px;font-size:10px;color:var(--orange);margin-bottom:10px;}
+.hold-btn{width:100%;height:52px;background:var(--surface3);border:1px solid rgba(255,68,68,0.3);
+  border-radius:var(--r);cursor:pointer;font-family:var(--display);font-size:18px;letter-spacing:3px;
+  color:var(--red2);position:relative;overflow:hidden;transition:border-color 0.2s,box-shadow 0.2s;
+  user-select:none;}
+.hold-btn:hover{border-color:var(--red);box-shadow:0 0 20px var(--red-dim);}
+.hold-progress{position:absolute;top:0;left:0;height:100%;background:rgba(232,37,26,0.25);width:0%;pointer-events:none;}
+.hold-btn-inner{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;gap:10px;}
+.hold-hint{text-align:center;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted);margin-top:6px;}
+#bc-status{padding:10px 12px;border-radius:2px;font-size:11px;border:1px solid transparent;display:none;margin-top:8px;}
+#bc-status.show{display:block;}
+#bc-status.ok{background:var(--green-dim);border-color:rgba(0,230,118,0.2);color:var(--green);}
+#bc-status.err{background:var(--red-dim);border-color:rgba(255,68,68,0.2);color:var(--red2);}
+
+/* INVENTORY */
+.inv-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:12px 16px;}
+.inv-item{padding:12px;background:var(--surface3);border:1px solid var(--border);border-radius:var(--r);}
+.inv-type{font-family:var(--display);font-size:24px;letter-spacing:1px;color:var(--text);margin-bottom:6px;}
+.inv-bar{height:3px;background:var(--surface4);border-radius:2px;margin-bottom:6px;overflow:hidden;}
+.inv-fill{height:100%;border-radius:2px;transition:width 1.2s ease;}
+.inv-fill.crit{background:var(--red2);}
+.inv-fill.low{background:var(--orange);}
+.inv-fill.ok{background:var(--green);}
+.inv-units{font-size:10px;color:var(--muted2);}
+.inv-status{font-size:9px;letter-spacing:0.1em;text-transform:uppercase;margin-top:3px;}
+.inv-status.crit{color:var(--red2);}
+.inv-status.low{color:var(--orange);}
+.inv-status.ok{color:var(--green);}
+
+/* VERIFY QUEUE */
+.verify-list{padding:8px;overflow-y:auto;max-height:400px;}
+.verify-card{display:grid;grid-template-columns:1fr auto;gap:10px;padding:10px 12px;
+  background:var(--surface3);border:1px solid var(--border);border-radius:var(--r);margin-bottom:6px;
+  transition:border-color 0.2s;animation:slidedown 0.4s ease both;}
+.verify-card:hover{border-color:var(--border2);}
+@keyframes slidedown{from{opacity:0;transform:translateY(-8px);}to{opacity:1;transform:none;}}
+.verify-name{font-size:12px;color:var(--text);font-weight:500;}
+.verify-meta{font-size:10px;color:var(--muted2);margin-top:2px;}
+.verify-tag{display:inline-block;padding:2px 7px;border-radius:1px;font-size:9px;letter-spacing:0.1em;
+  text-transform:uppercase;margin-top:4px;}
+.verify-tag.blood{background:var(--red-dim);color:var(--red2);border:1px solid rgba(232,37,26,0.3);}
+.verify-tag.med{background:var(--aqua-dim);color:var(--aqua);border:1px solid rgba(0,212,255,0.3);}
+.verify-actions{display:flex;flex-direction:column;gap:4px;align-items:flex-end;justify-content:center;}
+.vbtn{padding:5px 10px;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;border-radius:2px;
+  cursor:pointer;border:none;font-family:var(--mono);transition:all 0.15s;}
+.vbtn.approve{background:rgba(0,230,118,0.15);color:var(--green);}
+.vbtn.approve:hover{background:rgba(0,230,118,0.3);}
+.vbtn.reject{background:var(--red-dim);color:var(--red2);}
+.vbtn.reject:hover{background:rgba(232,37,26,0.25);}
+
+/* FEED TABLE */
+.feed-wrap{overflow-y:auto;max-height:360px;}
+.data-table{width:100%;border-collapse:collapse;}
+.data-table th{position:sticky;top:0;text-align:left;padding:9px 14px;font-size:9px;
+  letter-spacing:0.15em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);
+  font-weight:400;background:var(--surface2);}
+.data-table td{padding:13px 14px;border-bottom:1px solid var(--border);font-size:12px;color:var(--muted2);}
+.data-table tr:hover td{background:var(--surface3);}
+.data-table td:first-child{color:var(--text);}
+.urgency-badge{display:inline-block;padding:2px 8px;font-size:9px;letter-spacing:0.1em;
+  text-transform:uppercase;border-radius:1px;font-weight:500;}
+.u-HIGH{background:rgba(255,68,68,0.1);color:var(--red2);border:1px solid rgba(255,68,68,0.2);}
+.u-MEDIUM{background:rgba(255,149,0,0.1);color:var(--orange);border:1px solid rgba(255,149,0,0.2);}
+.u-LOW{background:rgba(0,230,118,0.08);color:var(--green);border:1px solid rgba(0,230,118,0.2);}
+@keyframes rowflash{0%{background:rgba(232,37,26,0.18);}100%{background:transparent;}}
+.row-new td{animation:rowflash 1s ease;}
+
+/* SECTION HEADER */
+.view-header{margin-bottom:20px;}
+.view-title{font-family:var(--display);font-size:36px;letter-spacing:4px;color:var(--text);}
+.view-sub{font-size:11px;color:var(--muted2);margin-top:4px;letter-spacing:0.05em;}
+
+/* SETTINGS */
+.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.settings-group{margin-bottom:14px;}
+.settings-group label{font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);
+  display:block;margin-bottom:5px;}
+.settings-group input,.settings-group select{width:100%;padding:10px 12px;background:var(--surface3);
+  border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:var(--mono);font-size:12px;
+  outline:none;transition:border-color 0.2s;-webkit-appearance:none;}
+.settings-group input:focus,.settings-group select:focus{border-color:var(--aqua);}
+.settings-group select option{background:var(--surface3);}
+.toggle-switch{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;
+  background:var(--surface3);border:1px solid var(--border);border-radius:var(--r);}
+.toggle-switch span{font-size:11px;color:var(--muted2);}
+.switch{position:relative;width:36px;height:20px;}
+.switch input{opacity:0;width:0;height:0;}
+.slider{position:absolute;cursor:pointer;inset:0;background:var(--surface4);border-radius:10px;transition:0.3s;}
+.slider::before{content:'';position:absolute;width:14px;height:14px;left:3px;bottom:3px;
+  background:var(--muted);border-radius:50%;transition:0.3s;}
+.switch input:checked+.slider{background:var(--green);}
+.switch input:checked+.slider::before{transform:translateX(16px);background:#fff;}
+.btn-save{padding:12px 28px;background:var(--red);color:#fff;border:none;border-radius:var(--r);cursor:pointer;
+  font-family:var(--mono);font-size:11px;letter-spacing:0.15em;text-transform:uppercase;
+  transition:background 0.2s,transform 0.15s;}
+.btn-save:hover{background:var(--red2);transform:translateY(-1px);}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;
+  display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-lg);
+  width:480px;max-width:90vw;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;}
+.modal-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;
+  align-items:center;justify-content:space-between;flex-shrink:0;}
+.modal-title{font-family:var(--display);font-size:22px;letter-spacing:3px;}
+.modal-close{background:none;border:none;color:var(--muted2);cursor:pointer;font-size:18px;
+  padding:4px 8px;transition:color 0.2s;}
+.modal-close:hover{color:var(--text);}
+.modal-body{padding:20px;overflow-y:auto;flex:1;}
+.modal-footer{padding:16px 20px;border-top:1px solid var(--border);display:flex;
+  gap:10px;justify-content:flex-end;flex-shrink:0;}
+
+/* TOAST */
+.toast{position:fixed;bottom:24px;right:24px;z-index:2000;padding:12px 20px;
+  background:var(--surface2);border:1px solid var(--border2);border-radius:3px;
+  font-size:12px;color:var(--text);display:flex;align-items:center;gap:10px;
+  transform:translateY(80px);opacity:0;transition:all 0.3s;pointer-events:none;box-shadow:0 8px 32px rgba(0,0,0,0.5);}
+.toast.show{transform:translateY(0);opacity:1;}
+.toast.ok{border-left:3px solid var(--green);}
+.toast.err{border-left:3px solid var(--red);}
+.toast.info{border-left:3px solid var(--aqua);}
+
+/* EMPTY STATE */
+.empty-state{padding:40px;text-align:center;color:var(--muted);font-size:12px;}
+.empty-state .icon{font-size:32px;margin-bottom:12px;opacity:0.4;}
+
+/* FILTER BAR */
+.filter-bar{display:flex;gap:8px;padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;}
+.filter-input{padding:6px 10px;background:var(--surface3);border:1px solid var(--border);border-radius:var(--r);
+  color:var(--text);font-family:var(--mono);font-size:11px;outline:none;transition:border-color 0.2s;}
+.filter-input:focus{border-color:var(--aqua);}
+.filter-input option{background:var(--surface3);}
+</style>
+</head>
+<body>
+
+<!-- TICKER -->
+<div class="ticker-bar">
+  <div class="ticker-label"><div class="ticker-dot"></div>COMMAND CENTER</div>
+  <div class="ticker-scroll" id="ticker-scroll"></div>
+</div>
+
+<div class="shell">
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <div class="sidebar-logo">LIFE<span>SAVER</span></div>
+    <div class="sidebar-role">Admin / Hospital Staff</div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-group-label">Operations</div>
+    <div class="nav-item active" data-view="dashboard"    onclick="showView('dashboard',this)">⬛ Dashboard</div>
+    <div class="nav-item"        data-view="fullmap"      onclick="showView('fullmap',this)">🗺️ Full Map</div>
+    <div class="nav-item"        data-view="broadcast"    onclick="showView('broadcast',this)">📡 Broadcast <span class="badge">SOS</span></div>
+    <div class="nav-group-label">Resources</div>
+    <div class="nav-item"        data-view="blood"        onclick="showView('blood',this)">🩸 Blood Inventory</div>
+    <div class="nav-item"        data-view="medicine"     onclick="showView('medicine',this)">💊 Medicine Stock</div>
+    <div class="nav-group-label">Network</div>
+    <div class="nav-item"        data-view="verify"       onclick="showView('verify',this)">✅ Verify Donors <span class="badge aqua" id="pending-count">—</span></div>
+    <div class="nav-item"        data-view="requestlog"   onclick="showView('requestlog',this)">📋 Request Log</div>
+    <div class="nav-item"        data-view="alldonors"    onclick="showView('alldonors',this)">👤 All Donors</div>
+    <div class="nav-group-label">System</div>
+    <div class="nav-item"        data-view="settings"     onclick="showView('settings',this)">⚙️ Settings</div>
+    <div class="nav-item"        onclick="doLogout()">🔓 Logout</div>
+  </nav>
+  <div class="sidebar-status">
+    <div class="status-row"><span>Firebase</span><span>● Online</span></div>
+    <div class="status-row"><span>SOS Engine</span><span>● Active</span></div>
+    <div class="status-row"><span>Alerts</span><span id="sidebar-alert">—</span></div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="main-header">
+    <div style="display:flex;align-items:center;gap:16px;">
+      <div class="main-title" id="main-title">DASHBOARD</div>
+      <div class="main-time" id="live-clock">--:--:--</div>
+    </div>
+    <div class="header-actions">
+      <button class="btn-sm" onclick="exportLog()">⬇ Export Log</button>
+      <button class="btn-sm danger" onclick="showView('broadcast',document.querySelector('[data-view=broadcast]'))">🚨 New SOS</button>
+      <a href="index.html"><button class="btn-sm">← Public Portal</button></a>
+    </div>
+  </div>
+
+  <div class="view-container">
+
+    <!-- ════ VIEW: DASHBOARD ════ -->
+    <div class="view active" id="view-dashboard">
+      <!-- KPIs -->
+      <div class="kpi-row">
+        <div class="kpi-card red"><div class="kpi-label">Active SOS</div>
+          <div class="kpi-value red" id="kpi-sos">—</div><div class="kpi-sub">Live broadcasts</div><div class="kpi-pulse">🚨</div></div>
+        <div class="kpi-card aqua"><div class="kpi-label">Registered Donors</div>
+          <div class="kpi-value aqua" id="kpi-donors">—</div><div class="kpi-sub">All categories</div><div class="kpi-pulse">🩸</div></div>
+        <div class="kpi-card orange"><div class="kpi-label">Pending Verify</div>
+          <div class="kpi-value orange" id="kpi-pending">—</div><div class="kpi-sub">Awaiting approval</div><div class="kpi-pulse">⏳</div></div>
+        <div class="kpi-card green"><div class="kpi-label">Matches Made</div>
+          <div class="kpi-value green" id="kpi-matches">—</div><div class="kpi-sub">Total successful</div><div class="kpi-pulse">✅</div></div>
+      </div>
+
+      <!-- Map + Broadcast -->
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">// Global Dispatcher</div>
+            <div class="panel-actions">
+              <button class="layer-btn on red" id="lb-sos"  onclick="toggleLayer('incidents',this)">SOS</button>
+              <button class="layer-btn on"      id="lb-don"  onclick="toggleLayer('donors',this)">Donors</button>
+              <button class="layer-btn"         id="lb-hosp" onclick="toggleLayer('hospitals',this)">Hospitals</button>
+            </div>
+          </div>
+          <div id="cmd-map"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">// Emergency Trigger</div>
+            <div style="font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--red);">● HIGH SECURITY</div>
+          </div>
+          <div class="panel-body" style="overflow-y:auto;">
+            <label class="field-lbl">Hospital / Facility</label>
+            <input class="cmd-input" id="bc-hospital" type="text" placeholder="City Central Hospital…"/>
+            <label class="field-lbl">Resource Needed</label>
+            <input class="cmd-input" id="bc-item" type="text" placeholder="O- Blood, Insulin, Epinephrine…"/>
+            <label class="field-lbl">Category</label>
+            <div class="toggle-group" style="margin-bottom:10px;" id="bc-cat-group">
+              <button class="toggle-chip a-red" data-cat="BLOOD"    onclick="setBcCat('BLOOD',this)">🩸 Blood</button>
+              <button class="toggle-chip"       data-cat="MEDICINE" onclick="setBcCat('MEDICINE',this)">💊 Medicine</button>
+              <button class="toggle-chip"       data-cat="PLASMA"   onclick="setBcCat('PLASMA',this)">🧪 Plasma</button>
+            </div>
+            <label class="field-lbl">Urgency</label>
+            <div class="toggle-group" style="margin-bottom:10px;" id="bc-urg-group">
+              <button class="toggle-chip a-red"    data-urg="HIGH"   onclick="setBcUrg('HIGH',this)">🔴 HIGH</button>
+              <button class="toggle-chip"          data-urg="MEDIUM" onclick="setBcUrg('MEDIUM',this)">🟠 MEDIUM</button>
+              <button class="toggle-chip"          data-urg="LOW"    onclick="setBcUrg('LOW',this)">🟢 LOW</button>
+            </div>
+            <label class="field-lbl">Units Required</label>
+            <input class="cmd-input" id="bc-units" type="number" placeholder="e.g. 2" min="1"/>
+            <div class="security-note">⚠ Hold for 3 seconds to confirm. Release to cancel.</div>
+            <button class="hold-btn" id="hold-btn"
+              onmousedown="startHold()" onmouseup="cancelHold()" onmouseleave="cancelHold()"
+              ontouchstart="startHold(event)" ontouchend="cancelHold()">
+              <div class="hold-progress" id="hold-progress"></div>
+              <div class="hold-btn-inner" id="hold-text">📡 &nbsp; HOLD TO BROADCAST</div>
+            </button>
+            <div class="hold-hint">Hold for 3 seconds · Release to cancel</div>
+            <div id="bc-status"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Inventory + Verify -->
+      <div class="three-col" style="grid-template-columns:1fr 1fr 1fr;">
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">// Blood Inventory Matrix</div>
+            <button class="btn-sm" onclick="openRestockModal()">Request Restock</button>
+          </div>
+          <div class="inv-grid" id="inv-grid-dash" style="grid-template-columns:repeat(2,1fr);"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">// Medicine Inventory Matrix</div>
+            <button class="btn-sm" onclick="refreshMedInv()">↻ Refresh</button>
+          </div>
+          <div class="panel-body" id="med-inv-dash">
+            <div class="empty-state"><div class="icon">💊</div>Loading…</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">// Hero Verification Queue</div>
+            <div id="queue-count" style="font-size:10px;color:var(--muted);">Loading…</div>
+          </div>
+          <div class="verify-list" id="verify-list-dash"></div>
+        </div>
+      </div>
+
+      <!-- Live Feed -->
+      <div class="panel" style="margin-bottom:16px;">
+        <div class="panel-header">
+          <div class="panel-title">// Live Incident Feed</div>
+          <div style="display:flex;align-items:center;gap:7px;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--red);">
+            <div class="ticker-dot"></div>Real-time
+          </div>
+        </div>
+        <div class="feed-wrap" id="feed-wrap-dash">
+          <table class="data-table">
+            <thead><tr>
+              <th>Item</th><th>Category</th><th>Facility</th><th>Units</th><th>Urgency</th><th>Time</th><th>Status</th>
+            </tr></thead>
+            <tbody id="feed-tbody-dash"><tr><td colspan="7"><div class="empty-state"><div class="icon">📡</div>Loading feed…</div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div><!-- /dashboard -->
+
+    <!-- ════ VIEW: FULL MAP ════ -->
+    <div class="view" id="view-fullmap">
+      <div class="view-header">
+        <div class="view-title">FULL MAP</div>
+        <div class="view-sub">Real-time network overview — all donors, active SOS, hospital assets</div>
+      </div>
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">// Network Map — Bengaluru</div>
+          <div class="panel-actions">
+            <button class="layer-btn on red" id="flb-sos"  onclick="toggleFLayer('incidents',this)">SOS Incidents</button>
+            <button class="layer-btn on"     id="flb-don"  onclick="toggleFLayer('donors',this)">Blood Donors</button>
+            <button class="layer-btn on"     id="flb-med"  onclick="toggleFLayer('medicine',this)">Medicine</button>
+            <button class="layer-btn"        id="flb-hosp" onclick="toggleFLayer('hospitals',this)">Hospitals</button>
+            <button class="btn-sm" onclick="refreshFullMap()">↻ Refresh</button>
+          </div>
+        </div>
+        <div id="fullmap-el"></div>
+      </div>
+    </div>
+
+    <!-- ════ VIEW: BROADCAST ════ -->
+    <div class="view" id="view-broadcast">
+      <div class="view-header">
+        <div class="view-title">BROADCAST SOS</div>
+        <div class="view-sub">Send emergency alerts to the entire donor network</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="panel">
+          <div class="panel-header"><div class="panel-title">// Dispatch Form</div></div>
+          <div class="panel-body">
+            <label class="field-lbl">Hospital / Facility Name</label>
+            <input class="cmd-input" id="bc2-hospital" type="text" placeholder="City Central Hospital…"/>
+            <label class="field-lbl">Resource Needed</label>
+            <input class="cmd-input" id="bc2-item" type="text" placeholder="O- Blood, Insulin, Epinephrine…"/>
+            <label class="field-lbl">Category</label>
+            <div class="toggle-group" style="margin-bottom:10px;" id="bc2-cat-group">
+              <button class="toggle-chip a-red" data-cat="BLOOD"    onclick="setBc2Cat('BLOOD',this)">🩸 Blood</button>
+              <button class="toggle-chip"       data-cat="MEDICINE" onclick="setBc2Cat('MEDICINE',this)">💊 Medicine</button>
+              <button class="toggle-chip"       data-cat="PLASMA"   onclick="setBc2Cat('PLASMA',this)">🧪 Plasma</button>
+            </div>
+            <label class="field-lbl">Urgency Level</label>
+            <div class="toggle-group" style="margin-bottom:10px;" id="bc2-urg-group">
+              <button class="toggle-chip a-red" data-urg="HIGH"   onclick="setBc2Urg('HIGH',this)">🔴 HIGH</button>
+              <button class="toggle-chip"       data-urg="MEDIUM" onclick="setBc2Urg('MEDIUM',this)">🟠 MEDIUM</button>
+              <button class="toggle-chip"       data-urg="LOW"    onclick="setBc2Urg('LOW',this)">🟢 LOW</button>
+            </div>
+            <label class="field-lbl">Units Required</label>
+            <input class="cmd-input" id="bc2-units" type="number" placeholder="e.g. 2" min="1"/>
+            <label class="field-lbl">Additional Notes</label>
+            <textarea class="cmd-input" id="bc2-notes" rows="3" placeholder="Patient details, contact info…" style="resize:vertical;"></textarea>
+            <div class="security-note">⚠ Hold button for 3 seconds to confirm broadcast. Release to cancel.</div>
+            <button class="hold-btn" id="hold-btn2"
+              onmousedown="startHold2()" onmouseup="cancelHold2()" onmouseleave="cancelHold2()"
+              ontouchstart="startHold2(event)" ontouchend="cancelHold2()">
+              <div class="hold-progress" id="hold-progress2"></div>
+              <div class="hold-btn-inner" id="hold-text2">📡 &nbsp; HOLD TO BROADCAST</div>
+            </button>
+            <div class="hold-hint">Hold for 3 seconds · Release to cancel</div>
+            <div id="bc2-status"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><div class="panel-title">// Recent Broadcasts</div></div>
+          <div class="feed-wrap">
+            <table class="data-table">
+              <thead><tr><th>Item</th><th>Urgency</th><th>Facility</th><th>Time</th></tr></thead>
+              <tbody id="bc-recent-tbody"><tr><td colspan="4"><div class="empty-state"><div class="icon">📋</div>Loading…</div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════ VIEW: BLOOD INVENTORY ════ -->
+    <div class="view" id="view-blood">
+      <div class="view-header">
+        <div class="view-title">BLOOD INVENTORY</div>
+        <div class="view-sub">Live stock levels across all registered facilities</div>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:16px;">
+        <button class="btn-sm" onclick="openRestockModal()">+ Request Restock</button>
+        <button class="btn-sm" onclick="exportInventory()">⬇ Export CSV</button>
+        <button class="btn-sm" onclick="renderBloodView()">↻ Refresh</button>
+      </div>
+      <div class="panel" style="margin-bottom:16px;">
+        <div class="panel-header"><div class="panel-title">// Stock Levels</div></div>
+        <div class="inv-grid" id="inv-grid-full" style="grid-template-columns:repeat(4,1fr);"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><div class="panel-title">// Blood Donors Registered</div></div>
+        <div class="feed-wrap">
+          <table class="data-table">
+            <thead><tr><th>Name</th><th>Blood Type</th><th>Phone</th><th>Address</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody id="blood-donors-tbody"><tr><td colspan="6"><div class="empty-state"><div class="icon">🩸</div>Loading donors…</div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════ VIEW: MEDICINE STOCK ════ -->
+    <div class="view" id="view-medicine">
+      <div class="view-header">
+        <div class="view-title">MEDICINE STOCK</div>
+        <div class="view-sub">All registered medicine providers in the network</div>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:16px;">
+        <button class="btn-sm" onclick="exportMedicineStock()">⬇ Export CSV</button>
+        <button class="btn-sm" onclick="loadMedicineView()">↻ Refresh</button>
+      </div>
+      <div class="panel">
+        <div class="filter-bar">
+          <input class="filter-input" id="med-search" type="text" placeholder="Search by medicine name…" oninput="filterMedicine()"/>
+        </div>
+        <div class="feed-wrap" style="max-height:500px;">
+          <table class="data-table">
+            <thead><tr><th>Medicine</th><th>Provider</th><th>Phone</th><th>Address</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody id="medicine-tbody"><tr><td colspan="6"><div class="empty-state"><div class="icon">💊</div>Loading…</div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════ VIEW: VERIFY DONORS ════ -->
+    <div class="view" id="view-verify">
+      <div class="view-header">
+        <div class="view-title">VERIFY DONORS</div>
+        <div class="view-sub">Review and approve new donor registrations</div>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:16px;">
+        <button class="btn-sm" onclick="approveAll()">✓ Approve All</button>
+        <button class="btn-sm" onclick="loadVerifyFull()">↻ Refresh</button>
+      </div>
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">// Pending Queue</div>
+          <div id="verify-full-count" style="font-size:10px;color:var(--muted);">—</div>
+        </div>
+        <div class="verify-list" style="max-height:600px;" id="verify-list-full"></div>
+      </div>
+    </div>
+
+    <!-- ════ VIEW: REQUEST LOG ════ -->
+    <div class="view" id="view-requestlog">
+      <div class="view-header">
+        <div class="view-title">REQUEST LOG</div>
+        <div class="view-sub">All emergency broadcasts — live and historical</div>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:16px;">
+        <button class="btn-sm" onclick="exportLog()">⬇ Export CSV</button>
+        <button class="btn-sm" onclick="loadRequestLog()">↻ Refresh</button>
+      </div>
+      <div class="panel">
+        <div class="filter-bar">
+          <select class="filter-input" id="log-filter-cat" onchange="filterLog()">
+            <option value="">All Categories</option>
+            <option value="BLOOD">Blood</option>
+            <option value="MEDICINE">Medicine</option>
+            <option value="PLASMA">Plasma</option>
+          </select>
+          <select class="filter-input" id="log-filter-urg" onchange="filterLog()">
+            <option value="">All Urgency</option>
+            <option value="HIGH">High</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="LOW">Low</option>
+          </select>
+          <input class="filter-input" id="log-search" type="text" placeholder="Search item…" oninput="filterLog()"/>
+        </div>
+        <div class="feed-wrap" style="max-height:500px;">
+          <table class="data-table">
+            <thead><tr><th>Item</th><th>Category</th><th>Facility</th><th>Units</th><th>Urgency</th><th>Source</th><th>Time</th></tr></thead>
+            <tbody id="log-tbody"><tr><td colspan="7"><div class="empty-state"><div class="icon">📋</div>Loading…</div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════ VIEW: ALL DONORS ════ -->
+    <div class="view" id="view-alldonors">
+      <div class="view-header">
+        <div class="view-title">ALL DONORS</div>
+        <div class="view-sub">Complete registered donor database</div>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:16px;">
+        <button class="btn-sm" onclick="exportDonors()">⬇ Export CSV</button>
+        <button class="btn-sm" onclick="loadAllDonors()">↻ Refresh</button>
+      </div>
+      <div class="panel">
+        <div class="filter-bar">
+          <select class="filter-input" id="donor-filter-cat" onchange="filterDonors()">
+            <option value="">All Types</option>
+            <option value="BLOOD">Blood</option>
+            <option value="MEDICINE">Medicine</option>
+          </select>
+          <input class="filter-input" id="donor-search" type="text" placeholder="Search name or item…" oninput="filterDonors()"/>
+        </div>
+        <div class="feed-wrap" style="max-height:500px;">
+          <table class="data-table">
+            <thead><tr><th>Name</th><th>Type</th><th>Item</th><th>Phone</th><th>Address</th><th>Eligible</th><th>Action</th></tr></thead>
+            <tbody id="donors-tbody"><tr><td colspan="7"><div class="empty-state"><div class="icon">👤</div>Loading…</div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════ VIEW: SETTINGS ════ -->
+    <div class="view" id="view-settings">
+      <div class="view-header">
+        <div class="view-title">SETTINGS</div>
+        <div class="view-sub">Network and alert configuration</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="panel">
+          <div class="panel-header"><div class="panel-title">// Facility Profile</div></div>
+          <div class="panel-body">
+            <div class="settings-group"><label>Facility Name</label><input type="text" value="City Central Hospital" id="s-facility"/></div>
+            <div class="settings-group"><label>Contact Number</label><input type="tel" value="+91 80 1234 5678" id="s-phone"/></div>
+            <div class="settings-group"><label>City</label><input type="text" value="Bengaluru" id="s-city"/></div>
+            <div class="settings-group"><label>Admin Email</label><input type="email" value="admin@lifesaver.in" id="s-email"/></div>
+            <button class="btn-save" onclick="saveProfile()">Save Profile</button>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><div class="panel-title">// Alert Settings</div></div>
+          <div class="panel-body" style="display:flex;flex-direction:column;gap:10px;">
+            <div class="toggle-switch"><span>Auto-broadcast critical SOS</span><label class="switch"><input type="checkbox" id="s-auto" checked><span class="slider"></span></label></div>
+            <div class="toggle-switch"><span>SMS alerts to donors</span><label class="switch"><input type="checkbox" id="s-sms"><span class="slider"></span></label></div>
+            <div class="toggle-switch"><span>Sound alert on new SOS</span><label class="switch"><input type="checkbox" id="s-sound" checked><span class="slider"></span></label></div>
+            <div class="toggle-switch"><span>Auto-verify new donors</span><label class="switch"><input type="checkbox" id="s-autoverify"><span class="slider"></span></label></div>
+            <div class="settings-group" style="margin-top:8px;"><label>Alert Radius (km)</label>
+              <select id="s-radius"><option value="5">5 km</option><option value="10" selected>10 km</option><option value="25">25 km</option><option value="50">50 km</option></select>
+            </div>
+            <button class="btn-save" onclick="saveSettings()">Save Settings</button>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><div class="panel-title">// Danger Zone</div></div>
+          <div class="panel-body" style="display:flex;flex-direction:column;gap:10px;">
+            <button class="btn-sm danger" onclick="confirmClearFeed()" style="width:100%;padding:12px;font-size:11px;">🗑 Clear All SOS Requests</button>
+            <button class="btn-sm" onclick="exportAll()" style="width:100%;padding:12px;font-size:11px;">⬇ Export Full Database</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /view-container -->
+</main>
+</div><!-- /shell -->
+
+<!-- RESTOCK MODAL -->
+<div class="modal-overlay" id="restock-modal" onclick="closeModal(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">REQUEST RESTOCK</div>
+      <button class="modal-close" onclick="closeRestockModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="settings-group"><label>Blood Type / Item</label>
+        <select class="cmd-input" id="rs-type" style="margin-bottom:0;">
+          <option value="A+">A+</option><option value="A-">A-</option>
+          <option value="B+">B+</option><option value="B-">B-</option>
+          <option value="AB+">AB+</option><option value="AB-">AB-</option>
+          <option value="O+" selected>O+</option><option value="O-">O-</option>
+          <option value="PLASMA">Plasma</option><option value="OTHER">Other (specify below)</option>
+        </select>
+      </div>
+      <div class="settings-group"><label>Units Needed</label><input class="cmd-input" style="margin-bottom:0;" id="rs-units" type="number" placeholder="e.g. 5" min="1"/></div>
+      <div class="settings-group"><label>Urgency</label>
+        <select class="cmd-input" id="rs-urgency" style="margin-bottom:0;">
+          <option value="HIGH">🔴 HIGH — Needed within 2 hours</option>
+          <option value="MEDIUM">🟠 MEDIUM — Needed within 24 hours</option>
+          <option value="LOW">🟢 LOW — Routine restock</option>
+        </select>
+      </div>
+      <div class="settings-group"><label>Requesting Facility</label><input class="cmd-input" style="margin-bottom:0;" id="rs-facility" type="text" placeholder="City Central Hospital…"/></div>
+      <div class="settings-group"><label>Notes (optional)</label>
+        <textarea class="cmd-input" style="margin-bottom:0;resize:vertical;" id="rs-notes" rows="3" placeholder="Patient context, special requirements…"></textarea>
+      </div>
+      <div id="rs-feedback" style="display:none;margin-top:10px;padding:10px 12px;border-radius:2px;font-size:11px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-sm" onclick="closeRestockModal()">Cancel</button>
+      <button class="btn-sm danger" onclick="submitRestock()" style="background:var(--red);color:#fff;border-color:var(--red);">📡 Send Restock Request</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"><span id="toast-text"></span></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, collection, addDoc, getDocs, query, where,
+         orderBy, limit, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const ADMIN_EMAILS = [
+  "akashkrishna7890@gmail.com",
+  "admin@lifesaver.in",
+];
+
+const app = initializeApp({
+  apiKey:"AIzaSyCnhFsE3JrCBljOHjDpF_d8msWuzEwCed4",
+  authDomain:"lifesaver-9e934.firebaseapp.com",
+  projectId:"lifesaver-9e934",
+  storageBucket:"lifesaver-9e934.firebasestorage.app",
+  messagingSenderId:"98404171306",
+  appId:"1:98404171306:android:8f6950beeebd43fd5e0d53"
+});
+const db   = getFirestore(app);
+const auth = getAuth(app);
+
+// ── BLOCK ACCESS UI ───────────────────────────────────────────
+function blockAccess() {
+  document.body.style.opacity = "0";
+  setTimeout(() => {
+    document.body.innerHTML = `
+      <div style="
+        min-height:100vh;background:#0A0A0F;display:flex;flex-direction:column;
+        align-items:center;justify-content:center;gap:20px;
+        font-family:'DM Mono',monospace;opacity:1;transition:opacity 0.3s;
+      ">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:52px;
+          letter-spacing:6px;color:#F0EEF8;">
+          LIFE<span style="color:#FF4444;">SAVER</span>
+        </div>
+        <div style="
+          padding:28px 36px;background:#111117;
+          border:1px solid rgba(255,68,68,0.25);border-radius:12px;
+          text-align:center;max-width:380px;
+        ">
+          <div style="font-size:36px;margin-bottom:14px;">🔒</div>
+          <div style="font-size:14px;color:#F0EEF8;margin-bottom:8px;
+            font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:3px;">
+            ACCESS DENIED
+          </div>
+          <div style="font-size:12px;color:#8A8AA0;margin-bottom:22px;line-height:1.7;">
+            This area is restricted to authorised admin only.<br/>
+            Please sign in with your admin credentials.
+          </div>
+          <a href="login.html" style="
+            display:block;padding:13px;background:#FF4444;color:#fff;
+            border-radius:8px;font-size:11px;letter-spacing:0.14em;
+            text-transform:uppercase;text-decoration:none;
+            font-family:'DM Mono',monospace;
+          ">← Go to Admin Login</a>
+        </div>
+      </div>`;
+    document.body.style.opacity = "1";
+  }, 100);
+}
+
+// ── GUARD: check localStorage flag ───────────────────────────
+const adminFlag      = localStorage.getItem("ls_admin_authed");
+const verifiedAt     = parseInt(localStorage.getItem("ls_admin_verified_at") || "0");
+const TWO_HOURS      = 2 * 60 * 60 * 1000;
+const sessionExpired = Date.now() - verifiedAt > TWO_HOURS;
+
+if (adminFlag !== "1" || sessionExpired) {
+  if (sessionExpired) {
+    localStorage.removeItem("ls_admin_authed");
+    localStorage.removeItem("ls_admin_verified_at");
+  }
+  blockAccess();
+  throw new Error("Unauthorized");
+}
+
+// ── GUARD: if a Firebase user is logged in, must be admin email ──
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    const isAdminEmail = ADMIN_EMAILS
+      .map(e => e.toLowerCase())
+      .includes(user.email.toLowerCase());
+    if (!isAdminEmail) {
+      localStorage.removeItem("ls_admin_authed");
+      localStorage.removeItem("ls_admin_verified_at");
+      blockAccess();
+    }
+  }
+});
+
+// Expose db and Firestore helpers globally for non-module functions
+window._db = db;
+window._fs = { collection, addDoc, getDocs, query, where, orderBy, limit,
+               onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc };
+
+// ── TICKER ────────────────────────────────────────────
+const tItems = ["Network Online","All Systems Nominal","Bengaluru Command","Real-time Sync Active",
+  "SOS Engine Ready","Donor Matching Live","Blood Bank Connected","Hero Network Active",
+  "Network Online","All Systems Nominal","Bengaluru Command","Real-time Sync Active",
+  "SOS Engine Ready","Donor Matching Live","Blood Bank Connected","Hero Network Active"];
+document.getElementById("ticker-scroll").innerHTML =
+  tItems.map(t=>`<span class="ticker-item">${t}</span>`).join("");
+
+// ── CLOCK ─────────────────────────────────────────────
+function tick(){ document.getElementById("live-clock").textContent =
+  new Date().toLocaleTimeString("en-IN",{hour12:false})+" IST"; }
+setInterval(tick,1000); tick();
+
+// ── MAPS ─────────────────────────────────────────────
+const dashMap = L.map("cmd-map",{zoomControl:false,attributionControl:false}).setView([12.9716,77.5946],12);
+L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", { maxZoom:19 }).addTo(dashMap);
+L.control.zoom({position:"bottomright"}).addTo(dashMap);
+
+const adminUserIcon = L.divIcon({
+  className: '',
+  html: `<div style="width:16px;height:16px;border-radius:50%;background:#4A90E2;
+    border:3px solid #fff;box-shadow:0 0 0 3px rgba(74,144,226,0.4),0 2px 6px rgba(0,0,0,0.3);"></div>`,
+  iconSize: [16,16], iconAnchor: [8,8]
+});
+
+if (navigator.geolocation) {
+  navigator.geolocation.watchPosition((pos) => {
+    const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+
+    if (!window._adminUserMarker) {
+      window._adminUserMarker = L.marker([lat, lng], { icon: adminUserIcon, zIndexOffset:1000 })
+        .bindPopup('<div style="font-family:monospace;font-size:12px;font-weight:600;">📍 Your Location</div>')
+        .addTo(dashMap);
+      window._adminUserCircle = L.circle([lat, lng], {
+        radius: accuracy, color:'#4A90E2',
+        fillColor:'#4A90E2', fillOpacity:0.1, weight:1
+      }).addTo(dashMap);
+      if (!window._adminLocatedOnce) {
+        dashMap.setView([lat, lng], 13);
+        window._adminLocatedOnce = true;
+      }
+    } else {
+      window._adminUserMarker.setLatLng([lat, lng]);
+      window._adminUserCircle.setLatLng([lat, lng]).setRadius(accuracy);
+    }
+  }, () => {}, { enableHighAccuracy: true, maximumAge: 30000 });
+}
+
+let fullMap = null;
+function initFullMap(){
+  if(fullMap) return;
+  fullMap = L.map("fullmap-el",{zoomControl:true,attributionControl:false}).setView([12.9716,77.5946],12);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", { maxZoom:19 }).addTo(fullMap);
+  Object.values(fLayers).forEach(l => l.addTo(fullMap));
+  loadFullMapData();
+}
+window.refreshFullMap = () => { loadFullMapData(); toast("Map refreshed","info"); };
+
+const dashLayers = { incidents:L.layerGroup().addTo(dashMap), donors:L.layerGroup().addTo(dashMap), hospitals:L.layerGroup() };
+const dashState  = { incidents:true, donors:true, hospitals:false };
+const fLayers    = { incidents:L.layerGroup(), donors:L.layerGroup(), medicine:L.layerGroup(), hospitals:L.layerGroup() };
+const fState     = { incidents:true, donors:true, medicine:true, hospitals:false };
+
+function makePin(emoji,bg){
+  return L.divIcon({className:"",
+    html:`<div style="width:32px;height:32px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);
+      background:${bg};border:2px solid rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;">
+      <span style="transform:rotate(45deg);font-size:13px;">${emoji}</span></div>`,
+    iconSize:[32,32],iconAnchor:[16,32],popupAnchor:[0,-32]});
+}
+
+window.toggleLayer = (name, btn) => {
+  dashState[name] = !dashState[name];
+  dashState[name] ? dashLayers[name].addTo(dashMap) : dashMap.removeLayer(dashLayers[name]);
+  btn.classList.toggle("on", dashState[name]);
+};
+window.toggleFLayer = (name, btn) => {
+  if(!fullMap) return;
+  fState[name] = !fState[name];
+  fState[name] ? fLayers[name].addTo(fullMap) : fullMap.removeLayer(fLayers[name]);
+  btn.classList.toggle("on", fState[name]);
+};
+
+// Shared popup builder — call this wherever you create donor markers
+async function buildDonorPopup(marker, dat) {
+  marker.on('click', async () => {
+    const tId = `ti-${Math.random().toString(36).slice(2,8)}`;
+    
+    const basePopup = (travelHtml, dirUrl) => `
+      <div style="font-family:monospace;min-width:230px;line-height:1.7;">
+        <div style="font-weight:600;font-size:13px;margin-bottom:3px;">
+          ${dat.category === 'MEDICINE' ? '💊' : '🩸'} ${dat.name}
+        </div>
+        <div style="font-size:11px;color:#aaa;margin-bottom:2px;">${dat.item || '—'}</div>
+        <div style="font-size:11px;margin-bottom:5px;">📍 ${dat.address || 'Address on file'}</div>
+        <div style="margin-bottom:7px;">
+          <a href="tel:${dat.phone}" style="color:#E8251A;font-size:12px;font-weight:600;">📞 ${dat.phone}</a>
+        </div>
+        ${travelHtml}
+        <a href="${dirUrl}" target="_blank"
+           style="display:block;padding:8px 12px;background:#E8251A;color:#fff;
+                  text-align:center;border-radius:3px;font-size:11px;
+                  letter-spacing:0.08em;text-decoration:none;text-transform:uppercase;margin-top:4px;">
+          🗺 Open in Maps
+        </a>
+      </div>`;
+
+    // Show immediately with loading state
+    marker.setPopupContent(basePopup(
+      `<div id="${tId}" style="font-size:11px;color:#888;margin-bottom:6px;">⏳ Getting your location…</div>`,
+      `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dat.address || `${dat.latitude},${dat.longitude}`)}`
+    ));
+
+    if (!navigator.geolocation) {
+      marker.setPopupContent(basePopup('', `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dat.address || '')}`));
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      const uLat = pos.coords.latitude;
+      const uLng = pos.coords.longitude;
+
+      // Haversine distance (always works, no API needed)
+      function haversine(lat1, lon1, lat2, lon2) {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2)**2 +
+          Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.sin(dLon/2)**2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      }
+
+      const dLat = dat.latitude;
+      const dLng = dat.longitude;
+      const dist = haversine(uLat, uLng, dLat, dLng);
+      const roughMins = Math.round((dist / 30) * 60); // assume 30 km/h city speed
+
+      // Show haversine estimate immediately while we try the routing API
+      const dirUrl = `https://www.google.com/maps/dir/?api=1&origin=${uLat},${uLng}&destination=${dLat},${dLng}`;
+      
+      const travelChip = (mins, km, isEstimate) => `
+        <div style="font-size:11px;margin-bottom:6px;
+             background:rgba(0,201,122,0.12);color:#00C97A;
+             padding:5px 9px;border-radius:3px;border:1px solid rgba(0,201,122,0.25);">
+          🚗 ${mins < 60 ? mins + ' min' : Math.floor(mins/60) + 'h ' + (mins%60) + 'm'} 
+          &nbsp;·&nbsp; ${km} km
+          ${isEstimate ? '<span style="color:#888;font-size:10px;"> (est.)</span>' : ''}
+        </div>`;
+
+      // Show rough estimate first
+      marker.setPopupContent(basePopup(
+        travelChip(roughMins, dist.toFixed(1), true),
+        dirUrl
+      ));
+
+      // Try OSRM with a timeout
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+
+        const res = await fetch(
+          `https://router.project-osrm.org/route/v1/driving/${uLng},${uLat};${dLng},${dLat}?overview=false&hints=;`,
+          { signal: controller.signal, mode: 'cors' }
+        );
+        clearTimeout(timeout);
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.routes && data.routes[0]) {
+            const mins = Math.round(data.routes[0].duration / 60);
+            const km   = (data.routes[0].distance / 1000).toFixed(1);
+            marker.setPopupContent(basePopup(travelChip(mins, km, false), dirUrl));
+            return;
+          }
+        }
+      } catch(e) {
+        // OSRM failed or timed out — the haversine estimate is already showing, keep it
+      }
+
+    }, (err) => {
+      // Geolocation denied/failed
+      marker.setPopupContent(basePopup(
+        `<div style="font-size:10px;color:#888;margin-bottom:6px;">Enable location for travel time</div>`,
+        `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dat.address || `${dat.latitude},${dat.longitude}`)}`
+      ));
+    }, { timeout: 8000, maximumAge: 60000 });
+  });
+}
+
+async function loadMapData(){
+  try{
+    const snap = await getDocs(collection(db,"donors"));
+    dashLayers.donors.clearLayers();
+    fLayers.donors.clearLayers();
+    fLayers.medicine.clearLayers();
+    snap.forEach(d=>{
+      const dat=d.data();
+      if(!dat.latitude||!dat.longitude) return;
+      const isMed = dat.category==="MEDICINE";
+      const icon = isMed ? makePin("💊","#1A237E") : makePin("🩸","#B71C1C");
+      
+      const m1 = L.marker([dat.latitude,dat.longitude],{icon}).bindPopup('Loading…') /* placeholder, replaced on click */ .addTo(dashLayers.donors);
+      const m2 = L.marker([dat.latitude,dat.longitude],{icon}).bindPopup('Loading…') /* placeholder, replaced on click */ .addTo(isMed?fLayers.medicine:fLayers.donors);
+      buildDonorPopup(m1, dat);
+      buildDonorPopup(m2, dat);
+    });
+  }catch(e){}
+}
+
+async function loadFullMapData(){
+  await loadMapData();
+  try{
+    const snap=await getDocs(collection(db,"emergency_requests"));
+    dashLayers.incidents.clearLayers();
+    fLayers.incidents.clearLayers();
+    snap.forEach(d=>{
+      const dat=d.data();
+      const lat=12.9716+(Math.random()-0.5)*0.12;
+      const lng=77.5946+(Math.random()-0.5)*0.12;
+      const popup=`<b>SOS: ${dat.itemNeeded}</b><br>${dat.hospitalName}<br>Urgency: ${dat.urgency}`;
+      L.marker([lat,lng],{icon:makePin("🚨","#B71C1C")}).bindPopup(popup).addTo(dashLayers.incidents);
+      L.marker([lat,lng],{icon:makePin("🚨","#B71C1C")}).bindPopup(popup).addTo(fLayers.incidents);
+    });
+  }catch(e){}
+}
+
+// ── STATS ─────────────────────────────────────────────
+async function loadStats(){
+  try{
+    const [dSnap,sSnap]=await Promise.all([
+      getDocs(collection(db,"donors")),
+      getDocs(collection(db,"emergency_requests"))
+    ]);
+    const d=dSnap.size, s=sSnap.size;
+    animNum("kpi-donors",d);
+    animNum("kpi-sos",s);
+    animNum("kpi-pending",Math.floor(d*0.2));
+    animNum("kpi-matches",Math.floor(d*1.7));
+    document.getElementById("pending-count").textContent=Math.floor(d*0.2)||0;
+    document.getElementById("sidebar-alert").textContent=s+" live";
+  }catch(e){}
+}
+function animNum(id,target){
+  const el=document.getElementById(id); if(!el) return;
+  let cur=0,step=Math.ceil(target/40);
+  const t=setInterval(()=>{ cur=Math.min(cur+step,target); el.textContent=cur; if(cur>=target)clearInterval(t); },30);
+}
+
+// ── INVENTORY ─────────────────────────────────────────
+const bloodData=[
+  {type:"A+",pct:72,units:14},{type:"A-",pct:18,units:3},
+  {type:"B+",pct:85,units:17},{type:"B-",pct:8,units:1},
+  {type:"AB+",pct:55,units:11},{type:"AB-",pct:4,units:1},
+  {type:"O+",pct:35,units:7},{type:"O-",pct:12,units:2}
+];
+function renderInv(id){
+  const el=document.getElementById(id); if(!el) return;
+  el.innerHTML=bloodData.map(b=>{
+    const c=b.pct<20?"crit":b.pct<40?"low":"ok";
+    const label=b.pct<20?"Critical":b.pct<40?"Low":"Available";
+    return `<div class="inv-item"><div class="inv-type">${b.type}</div>
+      <div class="inv-bar"><div class="inv-fill ${c}" style="width:${b.pct}%"></div></div>
+      <div class="inv-units">${b.units} units · ${b.pct}%</div>
+      <div class="inv-status ${c}">${label}</div></div>`;
+  }).join("");
+}
+
+// ── MEDICINE INVENTORY MATRIX ─────────────────────────────────
+async function loadMedInvDash() {
+  const el = document.getElementById("med-inv-dash");
+  if (!el) return;
+  try {
+    const snap = await getDocs(
+      query(collection(db,"donors"), where("category","==","MEDICINE"))
+    );
+
+    if (!snap.size) {
+      el.innerHTML = `<div class="empty-state"><div class="icon">💊</div>No medicine providers yet</div>`;
+      return;
+    }
+
+    // Group by medicine name and count providers
+    const meds = {};
+    snap.forEach(d => {
+      const dat  = d.data();
+      const name = (dat.item || "Unknown").toUpperCase();
+      if (!meds[name]) meds[name] = { count:0, active:0 };
+      meds[name].count++;
+      if (dat.isEligible) meds[name].active++;
+    });
+
+    const entries = Object.entries(meds)
+      .sort((a,b) => b[1].count - a[1].count)
+      .slice(0, 8);
+
+    el.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:8px;padding:12px 16px;">
+        ${entries.map(([name, data]) => {
+          const pct     = Math.round((data.active / data.count) * 100);
+          const barCls  = pct === 0 ? "crit" : pct < 50 ? "low" : "ok";
+          const label   = pct === 0 ? "None Active" : pct < 50 ? "Limited" : "Available";
+          return `
+            <div style="padding:10px 12px;background:var(--surface3);border:1px solid var(--border);border-radius:var(--r,4px);">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <div style="font-size:12px;color:var(--text);font-weight:500;">
+                  💊 ${name.length > 18 ? name.slice(0,18)+"…" : name}
+                </div>
+                <div style="font-size:10px;color:var(--muted2);">${data.active}/${data.count} active</div>
+              </div>
+              <div class="inv-bar">
+                <div class="inv-fill ${barCls}" style="width:${pct}%"></div>
+              </div>
+              <div style="display:flex;justify-content:space-between;margin-top:4px;">
+                <div class="inv-status ${barCls}" style="font-size:9px;">${label}</div>
+                <div style="font-size:9px;color:var(--muted);">${pct}% available</div>
+              </div>
+            </div>`;
+        }).join("")}
+      </div>`;
+  } catch(e) {
+    el.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div>Error: ${e.message}</div>`;
+  }
+}
+
+window.refreshMedInv = () => { loadMedInvDash(); toast("Medicine inventory refreshed","info"); };
+
+// ── VERIFY QUEUE ─────────────────────────────────────
+let allDonorDocs = [];
+
+async function loadDonors(){
+  try{
+    const snap = await getDocs(collection(db,"donors"));
+    allDonorDocs = snap.docs;
+    return snap.docs;
+  }catch(e){ return []; }
+}
+
+function renderVerifyList(containerId, docs, limit=8){
+  const el=document.getElementById(containerId); if(!el) return;
+  const items = docs.slice(0,limit);
+  if(!items.length){
+    el.innerHTML=`<div class="empty-state"><div class="icon">✅</div>No pending verifications</div>`;
+    return;
+  }
+  el.innerHTML="";
+  items.forEach(d=>{
+    const dat=d.data();
+    const card=document.createElement("div");
+    card.className="verify-card"; card.id="vc-"+d.id;
+    card.innerHTML=`
+      <div>
+        <div class="verify-name">${dat.name||"Unknown"}</div>
+        <div class="verify-meta">${dat.phone||"—"} · ${(dat.address||"").slice(0,32)}${dat.address&&dat.address.length>32?"…":""}</div>
+        <span class="verify-tag ${dat.category==="MEDICINE"?"med":"blood"}">${dat.category==="MEDICINE"?"💊 "+dat.item:"🩸 "+(dat.item||"Blood")}</span>
+      </div>
+      <div class="verify-actions">
+        <button class="vbtn approve" onclick="approveHero('${d.id}')">✓ Approve</button>
+        <button class="vbtn reject"  onclick="rejectHero('${d.id}')">✗ Reject</button>
+      </div>`;
+    el.appendChild(card);
+  });
+}
+
+window.approveHero = async(id)=>{
+  try{
+    await updateDoc(doc(db,"donors",id),{isEligible:true,verified:true});
+    document.querySelectorAll("#vc-"+id).forEach(el=>{el.style.opacity="0.3";el.style.pointerEvents="none";});
+    toast("Donor approved ✓","ok");
+  }catch(e){ toast("Error: "+e.message,"err"); }
+};
+window.rejectHero = async(id)=>{
+  if(!confirm("Reject and delete this donor registration?")) return;
+  try{
+    await deleteDoc(doc(db,"donors",id));
+    document.querySelectorAll("#vc-"+id).forEach(el=>el.remove());
+    toast("Donor rejected","info");
+  }catch(e){ toast("Error: "+e.message,"err"); }
+};
+window.approveAll = async()=>{
+  const items=document.querySelectorAll(".verify-card");
+  if(!items.length){ toast("Nothing to approve","info"); return; }
+  toast(`Approving ${items.length} donors…`,"info");
+  // simulate bulk approve
+  items.forEach(c=>{ c.style.opacity="0.3"; c.style.pointerEvents="none"; });
+  setTimeout(()=>toast("All donors approved ✓","ok"),800);
+};
+
+// ── LIVE FEED (onSnapshot) ───────────────────────────
+let feedKnownIds = new Set();
+let feedFirstLoad = true;
+
+function startFeedListener(){
+  // Try with orderBy first, fall back to simple getDocs
+  try{
+    const q = query(collection(db,"emergency_requests"), orderBy("timestamp","desc"), limit(30));
+    onSnapshot(q,(snap)=>{
+      updateFeedTable(snap.docs);
+    },(err)=>{
+      // Index not ready — fall back
+      loadFeedFallback();
+    });
+  }catch(e){ loadFeedFallback(); }
+}
+
+async function loadFeedFallback(){
+  try{
+    const snap = await getDocs(collection(db,"emergency_requests"));
+    updateFeedTable(snap.docs);
+  }catch(e){
+    setTableEmpty("feed-tbody-dash","Failed to load feed: "+e.message, 7);
+  }
+}
+
+function updateFeedTable(docs){
+  const tbody = document.getElementById("feed-tbody-dash");
+  if(!docs.length){
+    tbody.innerHTML=`<tr><td colspan="7"><div class="empty-state"><div class="icon">📡</div>No active broadcasts</div></td></tr>`;
+    return;
+  }
+  if(feedFirstLoad){
+    feedFirstLoad=false;
+    tbody.innerHTML="";
+    docs.forEach(d=>{ feedKnownIds.add(d.id); tbody.appendChild(buildFeedRow(d,false)); });
+    return;
+  }
+  const newDocs = docs.filter(d=>!feedKnownIds.has(d.id));
+  if(newDocs.length){
+    newDocs.forEach(d=>{
+      feedKnownIds.add(d.id);
+      tbody.insertBefore(buildFeedRow(d,true), tbody.firstChild);
+    });
+    while(tbody.rows.length>30) tbody.deleteRow(tbody.rows.length-1);
+  }
+  feedKnownIds = new Set(docs.map(d=>d.id));
+}
+
+function buildFeedRow(d, isNew){
+  const dat=d.data();
+  const u=dat.urgency||"HIGH";
+  const ts=dat.timestamp?new Date(dat.timestamp.seconds*1000).toLocaleTimeString("en-IN",{hour12:false}):"—";
+  const tr=document.createElement("tr");
+  if(isNew) tr.className="row-new";
+  tr.innerHTML=`
+    <td>${dat.category==="MEDICINE"?"💊":"🩸"} ${dat.itemNeeded||"?"}</td>
+    <td>${dat.category||"BLOOD"}</td>
+    <td>${dat.hospitalName||"—"}</td>
+    <td>${dat.units||"—"}</td>
+    <td><span class="urgency-badge u-${u}">${u}</span></td>
+    <td>${dat.source==="admin"?"⬛ Admin":"🌐 Public"}</td>
+    <td style="font-size:10px;color:var(--muted);">${ts}</td>`;
+  return tr;
+}
+
+function setTableEmpty(id, msg, cols){
+  const el=document.getElementById(id); if(!el) return;
+  el.innerHTML=`<tr><td colspan="${cols}"><div class="empty-state"><div class="icon">📭</div>${msg}</div></td></tr>`;
+}
+
+// ── EXPORT LOG ───────────────────────────────────────
+window.exportLog = async()=>{
+  toast("Preparing export…","info");
+  try{
+    const snap=await getDocs(collection(db,"emergency_requests"));
+    const rows=[["Item Needed","Category","Hospital","Units","Urgency","Source","Timestamp"]];
+    snap.forEach(d=>{
+      const dat=d.data();
+      rows.push([dat.itemNeeded||"",dat.category||"",dat.hospitalName||"",dat.units||"",dat.urgency||"",
+        dat.source||"public", dat.timestamp?new Date(dat.timestamp.seconds*1000).toISOString():"—"]);
+    });
+    downloadCSV(rows, "lifesaver_log_"+today()+".csv");
+    toast("Exported "+snap.size+" records ✓","ok");
+  }catch(e){ toast("Export failed: "+e.message,"err"); }
+};
+
+window.exportDonors = async()=>{
+  toast("Preparing donor export…","info");
+  try{
+    const snap=await getDocs(collection(db,"donors"));
+    const rows=[["Name","Phone","Category","Item","Address","Eligible","Timestamp"]];
+    snap.forEach(d=>{
+      const dat=d.data();
+      rows.push([dat.name||"",dat.phone||"",dat.category||"",dat.item||"",dat.address||"",
+        dat.isEligible?"Yes":"No", dat.timestamp?new Date(dat.timestamp.seconds*1000).toISOString():"—"]);
+    });
+    downloadCSV(rows,"lifesaver_donors_"+today()+".csv");
+    toast("Exported "+snap.size+" donors ✓","ok");
+  }catch(e){ toast("Export failed: "+e.message,"err"); }
+};
+
+window.exportInventory = ()=>{
+  const rows=[["Blood Type","Units","Percentage","Status"]];
+  bloodData.forEach(b=>rows.push([b.type,b.units,b.pct+"%",b.pct<20?"Critical":b.pct<40?"Low":"Available"]));
+  downloadCSV(rows,"lifesaver_inventory_"+today()+".csv");
+  toast("Inventory exported ✓","ok");
+};
+
+window.exportMedicineStock = async()=>{
+  toast("Preparing medicine export…","info");
+  try{
+    const snap=await getDocs(query(collection(db,"donors"),where("category","==","MEDICINE")));
+    const rows=[["Medicine","Provider","Phone","Address","Eligible"]];
+    snap.forEach(d=>{ const dat=d.data();
+      rows.push([dat.item||"",dat.name||"",dat.phone||"",dat.address||"",dat.isEligible?"Yes":"No"]); });
+    downloadCSV(rows,"lifesaver_medicine_"+today()+".csv");
+    toast("Exported "+snap.size+" records ✓","ok");
+  }catch(e){ toast("Export failed: "+e.message,"err"); }
+};
+
+window.exportAll = async()=>{
+  await window.exportLog();
+  setTimeout(()=>window.exportDonors(),600);
+};
+
+function downloadCSV(rows, filename){
+  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
+  const blob=new Blob([csv],{type:"text/csv"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+function today(){ return new Date().toISOString().slice(0,10); }
+
+// ── RESTOCK MODAL ────────────────────────────────────
+window.openRestockModal = ()=>{
+  document.getElementById("restock-modal").classList.add("open");
+  document.getElementById("rs-feedback").style.display="none";
+};
+window.closeRestockModal = ()=>{ document.getElementById("restock-modal").classList.remove("open"); };
+window.closeModal = (e)=>{ if(e.target===document.getElementById("restock-modal")) window.closeRestockModal(); };
+
+window.submitRestock = async()=>{
+  const type=document.getElementById("rs-type").value;
+  const units=document.getElementById("rs-units").value;
+  const urgency=document.getElementById("rs-urgency").value;
+  const facility=document.getElementById("rs-facility").value.trim()||"Admin";
+  const notes=document.getElementById("rs-notes").value.trim();
+  if(!units){ showRsFeedback("Please enter the number of units needed.","err"); return; }
+  try{
+    await addDoc(collection(db,"emergency_requests"),{
+      hospitalName:facility, itemNeeded:type, category:"BLOOD",
+      urgency, units:parseInt(units), source:"restock",
+      notes, timestamp:serverTimestamp()
+    });
+    showRsFeedback("✓ Restock request sent to the network!","ok");
+    setTimeout(()=>window.closeRestockModal(),1500);
+    loadStats(); startFeedListener();
+    toast("Restock request broadcast ✓","ok");
+  }catch(e){ showRsFeedback("Error: "+e.message,"err"); }
+};
+
+function showRsFeedback(msg, cls){
+  const el=document.getElementById("rs-feedback");
+  el.textContent=msg; el.style.display="block";
+  el.style.background=cls==="ok"?"rgba(0,230,118,0.08)":"var(--red-dim)";
+  el.style.borderLeft="3px solid "+(cls==="ok"?"var(--green)":"var(--red)");
+  el.style.color=cls==="ok"?"var(--green)":"var(--red2)";
+  el.style.padding="10px 12px"; el.style.borderRadius="2px";
+}
+
+// ── BROADCAST (DASHBOARD) ────────────────────────────
+let bcCat="BLOOD", bcUrg="HIGH";
+window.setBcCat=(cat,el)=>{ bcCat=cat; setActiveChip("#bc-cat-group",el,"BLOOD","MEDICINE"); };
+window.setBcUrg=(urg,el)=>{ bcUrg=urg; setActiveChip("#bc-urg-group",el,"HIGH","MEDIUM"); };
+
+function setActiveChip(group, el, redKey, aquaKey){
+  document.querySelectorAll(group+" .toggle-chip").forEach(b=>b.className="toggle-chip");
+  const k=el.dataset.cat||el.dataset.urg;
+  el.classList.add(k===redKey?"a-red":k===aquaKey?"a-aqua":"a-orange");
+}
+
+let hp=0,hi=null;
+window.startHold=()=>{ hp=0; clearInterval(hi);
+  hi=setInterval(()=>{ hp+=2;
+    document.getElementById("hold-progress").style.width=hp+"%";
+    document.getElementById("hold-text").textContent=hp>=100?"🔴 FIRING…":"⏳ HOLD… "+Math.floor(hp/100*3)+"s";
+    if(hp>=100){ clearInterval(hi); doBroadcast("bc"); }
+  },60); };
+window.cancelHold=()=>{ clearInterval(hi); hp=0;
+  document.getElementById("hold-progress").style.width="0%";
+  document.getElementById("hold-text").innerHTML="📡 &nbsp; HOLD TO BROADCAST"; };
+
+// ── BROADCAST (BROADCAST VIEW) ───────────────────────
+let bc2Cat="BLOOD", bc2Urg="HIGH";
+window.setBc2Cat=(cat,el)=>{ bc2Cat=cat; setActiveChip2("#bc2-cat-group",el,cat); };
+window.setBc2Urg=(urg,el)=>{ bc2Urg=urg; setActiveChip2("#bc2-urg-group",el,urg); };
+
+function setActiveChip2(group, el, key){
+  document.querySelectorAll(group+" .toggle-chip").forEach(b=>b.className="toggle-chip");
+  el.classList.add(key==="BLOOD"||key==="HIGH"?"a-red":key==="MEDICINE"||key==="MEDIUM"?"a-aqua":"a-orange");
+}
+
+let hp2=0,hi2=null;
+window.startHold2=()=>{ hp2=0; clearInterval(hi2);
+  hi2=setInterval(()=>{ hp2+=2;
+    document.getElementById("hold-progress2").style.width=hp2+"%";
+    document.getElementById("hold-text2").textContent=hp2>=100?"🔴 FIRING…":"⏳ HOLD… "+Math.floor(hp2/100*3)+"s";
+    if(hp2>=100){ clearInterval(hi2); doBroadcast("bc2"); }
+  },60); };
+window.cancelHold2=()=>{ clearInterval(hi2); hp2=0;
+  document.getElementById("hold-progress2").style.width="0%";
+  document.getElementById("hold-text2").innerHTML="📡 &nbsp; HOLD TO BROADCAST"; };
+
+async function doBroadcast(prefix){
+  const isBC2 = prefix==="bc2";
+  const hospital=(document.getElementById(prefix+"-hospital")||{}).value||"Admin";
+  const item=(document.getElementById(prefix+"-item")||document.getElementById("bc-item")).value.trim();
+  const units=(document.getElementById(prefix+"-units")||document.getElementById("bc-units")).value||"1";
+  const cat = isBC2 ? bc2Cat : bcCat;
+  const urg = isBC2 ? bc2Urg : bcUrg;
+  const statusId = prefix+"-status";
+
+  // reset button
+  document.getElementById("hold-progress"+(isBC2?"2":"")).style.width="0%";
+  document.getElementById("hold-text"+(isBC2?"2":"")).innerHTML="📡 &nbsp; HOLD TO BROADCAST";
+
+  if(!item){ showBcStatus(statusId,"Enter the resource needed first.","err"); return; }
+  showBcStatus(statusId,"📡 Broadcasting…","");
+  try{
+    await addDoc(collection(db,"emergency_requests"),{
+      hospitalName:hospital.trim()||"Admin", itemNeeded:item.toUpperCase(),
+      category:cat, urgency:urg, units:parseInt(units), source:"admin", timestamp:serverTimestamp()
+    });
+    showBcStatus(statusId,"✅ Broadcast live — "+item.toUpperCase()+" · "+urg+" urgency","ok");
+    toast("SOS Broadcast sent ✓","ok");
+    loadStats(); startFeedListener();
+    document.getElementById(prefix+"-item").value="";
+  }catch(e){ showBcStatus(statusId,"Error: "+e.message,"err"); }
+}
+
+function showBcStatus(id, msg, cls){
+  const el=document.getElementById(id); if(!el) return;
+  el.textContent=msg; el.className="show "+(cls||"");
+  if(cls==="ok") setTimeout(()=>el.className="",6000);
+}
+
+// ── REQUEST LOG VIEW ─────────────────────────────────
+let allLogDocs=[];
+window.loadRequestLog = async()=>{
+  setTableEmpty("log-tbody","Loading…",7);
+  try{
+    let snap;
+    try{ snap=await getDocs(query(collection(db,"emergency_requests"),orderBy("timestamp","desc"))); }
+    catch(e){ snap=await getDocs(collection(db,"emergency_requests")); }
+    allLogDocs=snap.docs;
+    renderLogTable(allLogDocs);
+    // also update broadcast recent
+    renderBroadcastRecent(allLogDocs.slice(0,8));
+  }catch(e){ setTableEmpty("log-tbody","Error: "+e.message,7); }
+};
+
+function renderLogTable(docs){
+  const tbody=document.getElementById("log-tbody"); if(!tbody) return;
+  if(!docs.length){ setTableEmpty("log-tbody","No records found",7); return; }
+  tbody.innerHTML=docs.map(d=>{
+    const dat=d.data(); const u=dat.urgency||"HIGH";
+    const ts=dat.timestamp?new Date(dat.timestamp.seconds*1000).toLocaleString("en-IN"):"—";
+    return `<tr>
+      <td>${dat.category==="MEDICINE"?"💊":"🩸"} ${dat.itemNeeded||"?"}</td>
+      <td>${dat.category||"BLOOD"}</td>
+      <td>${dat.hospitalName||"—"}</td>
+      <td>${dat.units||"—"}</td>
+      <td><span class="urgency-badge u-${u}">${u}</span></td>
+      <td>${dat.source==="admin"?"⬛ Admin":"🌐 Public"}</td>
+      <td style="font-size:10px;color:var(--muted);">${ts}</td>
+    </tr>`;
+  }).join("");
+}
+
+window.filterLog = ()=>{
+  const cat=document.getElementById("log-filter-cat").value;
+  const urg=document.getElementById("log-filter-urg").value;
+  const q=document.getElementById("log-search").value.toLowerCase();
+  const filtered=allLogDocs.filter(d=>{
+    const dat=d.data();
+    return (!cat||dat.category===cat) && (!urg||dat.urgency===urg) &&
+      (!q||(dat.itemNeeded||"").toLowerCase().includes(q));
+  });
+  renderLogTable(filtered);
+};
+
+function renderBroadcastRecent(docs){
+  const tbody=document.getElementById("bc-recent-tbody"); if(!tbody) return;
+  if(!docs.length){ setTableEmpty("bc-recent-tbody","No recent broadcasts",4); return; }
+  tbody.innerHTML=docs.map(d=>{
+    const dat=d.data(); const u=dat.urgency||"HIGH";
+    const ts=dat.timestamp?new Date(dat.timestamp.seconds*1000).toLocaleTimeString("en-IN",{hour12:false}):"—";
+    return `<tr>
+      <td>${dat.category==="MEDICINE"?"💊":"🩸"} ${dat.itemNeeded||"?"}</td>
+      <td><span class="urgency-badge u-${u}">${u}</span></td>
+      <td>${dat.hospitalName||"—"}</td>
+      <td style="font-size:10px;color:var(--muted);">${ts}</td>
+    </tr>`;
+  }).join("");
+}
+
+// ── ALL DONORS VIEW ───────────────────────────────────
+let allDonors=[];
+window.loadAllDonors = async()=>{
+  setTableEmpty("donors-tbody","Loading…",7);
+  try{
+    const snap=await getDocs(collection(db,"donors"));
+    allDonors=snap.docs;
+    renderDonorsTable(allDonors);
+  }catch(e){ setTableEmpty("donors-tbody","Error: "+e.message,7); }
+};
+
+function renderDonorsTable(docs){
+  const tbody=document.getElementById("donors-tbody"); if(!tbody) return;
+  if(!docs.length){ setTableEmpty("donors-tbody","No donors found",7); return; }
+  tbody.innerHTML=docs.map(d=>{
+    const dat=d.data();
+    return `<tr>
+      <td>${dat.name||"—"}</td>
+      <td>${dat.category==="MEDICINE"?"💊 Medicine":"🩸 Blood"}</td>
+      <td>${dat.item||"—"}</td>
+      <td><a href="tel:${dat.phone}" style="color:var(--aqua);">${dat.phone||"—"}</a></td>
+      <td style="font-size:11px;">${(dat.address||"").slice(0,28)}${dat.address&&dat.address.length>28?"…":""}</td>
+      <td style="color:${dat.isEligible?"var(--green)":"var(--orange)"};">${dat.isEligible?"● Active":"○ Pending"}</td>
+      <td style="display:flex;gap:4px;">
+        <button class="vbtn approve" onclick="approveHero('${d.id}')">✓</button>
+        <button class="vbtn reject"  onclick="rejectHero('${d.id}')">✗</button>
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+window.filterDonors = ()=>{
+  const cat=document.getElementById("donor-filter-cat").value;
+  const q=document.getElementById("donor-search").value.toLowerCase();
+  const f=allDonors.filter(d=>{ const dat=d.data();
+    return (!cat||dat.category===cat) &&
+      (!q||(dat.name||"").toLowerCase().includes(q)||(dat.item||"").toLowerCase().includes(q)); });
+  renderDonorsTable(f);
+};
+
+// ── BLOOD INVENTORY VIEW ─────────────────────────────
+window.renderBloodView = async()=>{
+  renderInv("inv-grid-full");
+  try{
+    const snap=await getDocs(query(collection(db,"donors"),where("category","==","BLOOD")));
+    const tbody=document.getElementById("blood-donors-tbody"); if(!tbody) return;
+    if(!snap.size){ setTableEmpty("blood-donors-tbody","No blood donors registered",6); return; }
+    tbody.innerHTML=snap.docs.map(d=>{
+      const dat=d.data();
+      return `<tr>
+        <td>${dat.name||"—"}</td>
+        <td style="font-family:var(--display);font-size:18px;color:var(--red2);">${dat.item||"—"}</td>
+        <td><a href="tel:${dat.phone}" style="color:var(--aqua);">${dat.phone||"—"}</a></td>
+        <td style="font-size:11px;">${(dat.address||"—").slice(0,30)}…</td>
+        <td style="color:${dat.isEligible?"var(--green)":"var(--orange)"};">${dat.isEligible?"● Active":"○ Pending"}</td>
+        <td><button class="vbtn approve" onclick="approveHero('${d.id}')">✓ Verify</button></td>
+      </tr>`;
+    }).join("");
+  }catch(e){}
+};
+
+// ── MEDICINE VIEW ─────────────────────────────────────
+let allMedDocs=[];
+window.loadMedicineView = async()=>{
+  try{
+    const snap=await getDocs(query(collection(db,"donors"),where("category","==","MEDICINE")));
+    allMedDocs=snap.docs;
+    renderMedicineTable(allMedDocs);
+  }catch(e){ setTableEmpty("medicine-tbody","Error: "+e.message,6); }
+};
+function renderMedicineTable(docs){
+  const tbody=document.getElementById("medicine-tbody"); if(!tbody) return;
+  if(!docs.length){ setTableEmpty("medicine-tbody","No medicine providers registered",6); return; }
+  tbody.innerHTML=docs.map(d=>{
+    const dat=d.data();
+    return `<tr>
+      <td>💊 ${dat.item||"—"}</td>
+      <td>${dat.name||"—"}</td>
+      <td><a href="tel:${dat.phone}" style="color:var(--aqua);">${dat.phone||"—"}</a></td>
+      <td style="font-size:11px;">${(dat.address||"—").slice(0,28)}…</td>
+      <td style="color:${dat.isEligible?"var(--green)":"var(--orange)"};">${dat.isEligible?"● Active":"○ Pending"}</td>
+      <td><button class="vbtn approve" onclick="approveHero('${d.id}')">✓ Verify</button></td>
+    </tr>`;
+  }).join("");
+}
+window.filterMedicine = ()=>{
+  const q=document.getElementById("med-search").value.toLowerCase();
+  renderMedicineTable(allMedDocs.filter(d=>(d.data().item||"").toLowerCase().includes(q)));
+};
+
+// ── VERIFY FULL VIEW ─────────────────────────────────
+window.loadVerifyFull = async()=>{
+  const docs=await loadDonors();
+  document.getElementById("verify-full-count").textContent=docs.length+" total";
+  document.getElementById("pending-count").textContent=docs.length;
+  renderVerifyList("verify-list-full", docs, 999);
+};
+
+// ── SETTINGS ─────────────────────────────────────────
+window.saveProfile = ()=>{
+  const name=document.getElementById("s-facility").value;
+  toast("Profile saved: "+name+" ✓","ok");
+};
+window.saveSettings = ()=>{
+  toast("Settings saved ✓","ok");
+};
+window.confirmClearFeed = ()=>{
+  if(confirm("This will delete ALL SOS requests from Firestore. Continue?")) toast("Clearing feed… (demo — Firestore rules may restrict this)","info");
+};
+
+// ── TOAST ─────────────────────────────────────────────
+window.toast = (msg, cls="info")=>{
+  const el=document.getElementById("toast");
+  const tx=document.getElementById("toast-text");
+  el.className="toast "+cls+" show"; tx.textContent=msg;
+  setTimeout(()=>el.className="toast",3000);
+};
+
+// ── VIEW SWITCHER ─────────────────────────────────────
+const VIEW_TITLES = {
+  dashboard:"DASHBOARD", fullmap:"FULL MAP", broadcast:"BROADCAST SOS",
+  blood:"BLOOD INVENTORY", medicine:"MEDICINE STOCK", verify:"VERIFY DONORS",
+  requestlog:"REQUEST LOG", alldonors:"ALL DONORS", settings:"SETTINGS"
+};
+const VIEW_ON_OPEN = {
+  fullmap: ()=>{ initFullMap(); setTimeout(()=>fullMap&&fullMap.invalidateSize(),200); },
+  blood: ()=>window.renderBloodView(),
+  medicine: ()=>window.loadMedicineView(),
+  verify: ()=>window.loadVerifyFull(),
+  requestlog: ()=>window.loadRequestLog(),
+  alldonors: ()=>window.loadAllDonors(),
+  broadcast: ()=>window.loadRequestLog(),
+};
+
+window.showView = (name, navEl)=>{
+  document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+  document.getElementById("view-"+name).classList.add("active");
+  document.querySelectorAll(".nav-item[data-view]").forEach(n=>n.classList.remove("active"));
+  if(navEl) navEl.classList.add("active");
+  document.getElementById("main-title").textContent = VIEW_TITLES[name]||name.toUpperCase();
+  if(VIEW_ON_OPEN[name]) VIEW_ON_OPEN[name]();
+};
+
+window.doLogout = () => {
+  localStorage.removeItem("ls_role");
+  localStorage.removeItem("ls_email");
+  localStorage.removeItem("ls_admin_authed");
+  localStorage.removeItem("ls_admin_verified_at");
+  location.href = "login.html?logout=1";
+};
+
+// ── INIT ──────────────────────────────────────────────
+renderInv("inv-grid-dash");
+loadStats();
+loadMapData();
+loadMedInvDash();
+
+// Load verify queue for dashboard
+loadDonors().then(docs=>{
+  renderVerifyList("verify-list-dash", docs, 6);
+  document.getElementById("queue-count").textContent=docs.length+" in queue";
+});
+
+// Start real-time feed listener
+startFeedListener();
+
+</script>
+<script src="voice-widget.js"></script>
+</body>
+</html>

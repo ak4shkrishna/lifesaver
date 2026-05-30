@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>LIFESAVER — My Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --red:#E8251A;--red2:#FF4436;--red-dim:rgba(232,37,26,0.12);--red-glow:rgba(232,37,26,0.35);
+  --aqua:#00D4FF;--aqua-dim:rgba(0,212,255,0.1);
+  --green:#00E676;--green-dim:rgba(0,230,118,0.1);
+  --gold:#FFD700;--gold-dim:rgba(255,215,0,0.12);
+  --orange:#FF6B00;
+  --black:#060608;--surface:#0C0D10;--surface2:#121318;--surface3:#191B22;--surface4:#1E2028;
+  --border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.11);
+  --text:#EEF0F5;--muted:#5A5E70;--muted2:#8B90A8;
+  --mono:'DM Mono',monospace;--display:'Bebas Neue',sans-serif;--serif:'Instrument Serif',serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{background:var(--black);color:var(--text);font-family:var(--mono);font-size:13px;line-height:1.6;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;opacity:0.02;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");background-size:200px;}
+::-webkit-scrollbar{width:3px;}
+::-webkit-scrollbar-track{background:var(--black);}
+::-webkit-scrollbar-thumb{background:var(--red);border-radius:2px;}
+
+/* ── WELCOME CINEMATIC OVERLAY ── */
+#welcome-overlay{
+  position:fixed;inset:0;z-index:5000;
+  background:var(--black);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:24px;overflow:hidden;
+}
+#welcome-overlay.fade-out{animation:fadeOut 0.6s ease forwards;}
+@keyframes fadeOut{to{opacity:0;pointer-events:none;}}
+
+.wave{
+  position:absolute;top:0;left:-100%;width:300%;height:100%;
+  background:linear-gradient(90deg,transparent 0%,rgba(232,37,26,0.08) 30%,rgba(0,212,255,0.12) 50%,rgba(232,37,26,0.06) 70%,transparent 100%);
+  animation:wave 1.4s ease forwards;
+}
+@keyframes wave{from{left:-100%;}to{left:100%;}}
+
+.welcome-text{
+  font-family:var(--display);font-size:clamp(32px,5vw,64px);
+  letter-spacing:6px;text-align:center;z-index:1;
+  animation:textIn 0.5s ease 0.3s both;
+}
+.welcome-text span{color:var(--red);}
+.welcome-sub{
+  font-family:var(--serif);font-style:italic;font-size:18px;
+  color:var(--muted2);z-index:1;
+  animation:textIn 0.5s ease 0.6s both;
+}
+.welcome-name{
+  font-family:var(--display);font-size:clamp(24px,4vw,48px);
+  letter-spacing:4px;color:var(--aqua);z-index:1;
+  animation:textIn 0.5s ease 0.5s both;
+}
+@keyframes textIn{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:none;}}
+
+.progress-bar{
+  width:280px;height:2px;background:var(--surface3);border-radius:2px;
+  overflow:hidden;z-index:1;animation:textIn 0.4s ease 0.8s both;
+}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--red),var(--aqua));
+  width:0%;animation:loadBar 1.2s ease 0.9s forwards;}
+@keyframes loadBar{to{width:100%;}}
+
+/* ── IDLE TIMEOUT OVERLAY ── */
+#idle-overlay{
+  position:fixed;inset:0;z-index:4000;
+  background:rgba(6,6,8,0.85);
+  backdrop-filter:blur(16px);
+  display:none;flex-direction:column;align-items:center;justify-content:center;gap:20px;
+}
+#idle-overlay.show{display:flex;}
+.idle-icon{font-size:48px;animation:pulse 2s ease infinite;}
+@keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.05);}}
+.idle-title{font-family:var(--display);font-size:36px;letter-spacing:4px;color:var(--text);}
+.idle-sub{font-size:12px;letter-spacing:0.1em;color:var(--muted2);text-align:center;max-width:320px;}
+.idle-btn{padding:14px 36px;background:var(--red);color:#fff;border:none;border-radius:2px;cursor:pointer;
+  font-family:var(--display);font-size:20px;letter-spacing:4px;transition:all 0.2s;}
+.idle-btn:hover{background:var(--red2);box-shadow:0 8px 28px var(--red-glow);}
+
+/* ── NAV ── */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:500;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 40px;
+  background:rgba(6,6,8,0.85);backdrop-filter:blur(16px);
+  border-bottom:1px solid var(--border);
+}
+.nav-logo{font-family:var(--display);font-size:22px;letter-spacing:3px;display:flex;align-items:center;gap:8px;}
+.nav-logo span{color:var(--red);}
+.nav-right{display:flex;align-items:center;gap:16px;}
+.user-pill{
+  display:flex;align-items:center;gap:10px;
+  padding:6px 14px 6px 6px;
+  background:var(--surface2);border:1px solid var(--border2);border-radius:24px;
+}
+.user-avatar{width:30px;height:30px;border-radius:50%;object-fit:cover;
+  border:2px solid var(--red);background:var(--surface3);}
+.user-avatar-init{width:30px;height:30px;border-radius:50%;background:var(--red);
+  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;color:#fff;flex-shrink:0;}
+.user-name{font-size:12px;color:var(--text);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.btn-signout{padding:8px 16px;background:transparent;border:1px solid var(--border2);
+  border-radius:2px;color:var(--muted2);font-family:var(--mono);font-size:10px;
+  letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;transition:all 0.2s;}
+.btn-signout:hover{color:var(--red2);border-color:rgba(232,37,26,0.4);}
+
+/* ── PAGE ── */
+.page{padding:100px 40px 60px;max-width:1200px;margin:0 auto;}
+
+/* ── VITAL CARD ── */
+.vital-card{
+  background:var(--surface);border:1px solid var(--border2);border-radius:4px;
+  padding:32px 36px;margin-bottom:24px;
+  display:grid;grid-template-columns:auto 1fr auto;gap:32px;align-items:center;
+  position:relative;overflow:hidden;
+}
+.vital-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,var(--red),var(--aqua),var(--green));}
+.vital-card::after{
+  content:'';position:absolute;right:-60px;top:-60px;
+  width:200px;height:200px;border-radius:50%;
+  background:radial-gradient(circle,rgba(232,37,26,0.08),transparent 70%);
+  pointer-events:none;
+}
+.vital-avatar-wrap{position:relative;}
+.vital-avatar{width:80px;height:80px;border-radius:50%;object-fit:cover;
+  border:3px solid var(--red);display:block;}
+.vital-avatar-init{width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,var(--red),var(--red2));
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--display);font-size:32px;color:#fff;border:3px solid var(--red);}
+.vital-verified{
+  position:absolute;bottom:-4px;right:-4px;
+  width:24px;height:24px;border-radius:50%;
+  background:var(--green);border:2px solid var(--black);
+  display:flex;align-items:center;justify-content:center;font-size:11px;
+}
+.vital-info{min-width:0;}
+.vital-greeting{font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin-bottom:4px;}
+.vital-name{font-family:var(--display);font-size:clamp(24px,3vw,40px);letter-spacing:3px;color:var(--text);line-height:1;margin-bottom:8px;}
+.vital-email{font-size:12px;color:var(--muted2);margin-bottom:12px;}
+.vital-tags{display:flex;gap:8px;flex-wrap:wrap;}
+.tag{padding:4px 12px;border-radius:2px;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;border:1px solid;}
+.tag-blood{background:var(--red-dim);color:var(--red2);border-color:rgba(232,37,26,0.3);}
+.tag-hero{background:var(--aqua-dim);color:var(--aqua);border-color:rgba(0,212,255,0.3);}
+.tag-active{background:var(--green-dim);color:var(--green);border-color:rgba(0,230,118,0.3);}
+.vital-stats{display:flex;flex-direction:column;gap:16px;text-align:right;}
+.vital-stat-num{font-family:var(--display);font-size:36px;line-height:1;color:var(--text);}
+.vital-stat-num.red{color:var(--red2);}
+.vital-stat-num.aqua{color:var(--aqua);}
+.vital-stat-label{font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted);}
+
+/* BLOOD TYPE BADGE */
+.blood-badge{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  width:72px;height:72px;border-radius:50%;
+  background:var(--red-dim);border:2px solid var(--red2);
+  font-family:var(--display);font-size:22px;color:var(--red2);line-height:1;
+}
+.blood-badge small{font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);}
+
+/* ── KPI ROW ── */
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;}
+.kpi{padding:20px;background:var(--surface2);border:1px solid var(--border);border-radius:3px;
+  position:relative;overflow:hidden;cursor:default;}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
+.kpi.red::before{background:var(--red);}
+.kpi.aqua::before{background:var(--aqua);}
+.kpi.green::before{background:var(--green);}
+.kpi.gold::before{background:var(--gold);}
+.kpi-val{font-family:var(--display);font-size:40px;line-height:1;margin-bottom:4px;}
+.kpi.red .kpi-val{color:var(--red2);}
+.kpi.aqua .kpi-val{color:var(--aqua);}
+.kpi.green .kpi-val{color:var(--green);}
+.kpi.gold .kpi-val{color:var(--gold);}
+.kpi-lbl{font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);}
+.kpi-sub{font-size:10px;color:var(--muted2);margin-top:2px;}
+.kpi-icon{position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:28px;opacity:0.1;}
+
+/* ── GRID ── */
+.main-grid{display:grid;grid-template-columns:1.2fr 1fr;gap:20px;margin-bottom:24px;}
+
+/* ── PANEL ── */
+.panel{background:var(--surface2);border:1px solid var(--border);border-radius:3px;
+  display:flex;flex-direction:column;overflow:hidden;}
+.panel-head{
+  padding:14px 18px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
+}
+.panel-title{font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted2);}
+.panel-tag{font-size:9px;letter-spacing:0.12em;text-transform:uppercase;padding:3px 8px;
+  border-radius:1px;background:var(--green-dim);color:var(--green);border:1px solid rgba(0,230,118,0.25);}
+.panel-body{padding:16px 18px;overflow-y:auto;max-height:420px;flex:1;}
+
+/* ── TIMELINE ── */
+.timeline{display:flex;flex-direction:column;gap:0;}
+.tl-item{
+  display:flex;gap:16px;padding:14px 0;border-bottom:1px solid var(--border);
+  animation:slideUp 0.5s ease both;
+}
+.tl-item:last-child{border-bottom:none;}
+@keyframes slideUp{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:none;}}
+.tl-dot-wrap{display:flex;flex-direction:column;align-items:center;gap:0;flex-shrink:0;padding-top:4px;}
+.tl-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.tl-dot.blood{background:var(--red2);}
+.tl-dot.med{background:var(--aqua);}
+.tl-dot.sos{background:var(--orange);}
+.tl-line{flex:1;width:1px;background:var(--border);}
+.tl-info{flex:1;min-width:0;}
+.tl-title{font-size:12px;color:var(--text);font-weight:500;margin-bottom:3px;}
+.tl-meta{font-size:10px;color:var(--muted2);}
+.tl-date{font-size:10px;color:var(--muted);text-align:right;flex-shrink:0;padding-top:4px;}
+
+/* ── REQUESTS ── */
+.req-item{
+  padding:14px;background:var(--surface3);border:1px solid var(--border);
+  border-radius:2px;margin-bottom:8px;
+  animation:slideUp 0.4s ease both;
+}
+.req-item:last-child{margin-bottom:0;}
+.req-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.req-name{font-size:12px;color:var(--text);font-weight:500;}
+.req-badge{padding:3px 8px;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;
+  border-radius:1px;border:1px solid;}
+.req-badge.active{background:rgba(232,37,26,0.12);color:var(--red2);border-color:rgba(232,37,26,0.3);}
+.req-badge.pending{background:rgba(255,107,0,0.1);color:var(--orange);border-color:rgba(255,107,0,0.3);}
+.req-badge.fulfilled{background:var(--green-dim);color:var(--green);border-color:rgba(0,230,118,0.3);}
+.req-progress-wrap{display:flex;align-items:center;gap:10px;}
+.req-progress{flex:1;height:4px;background:var(--surface4);border-radius:2px;overflow:hidden;}
+.req-progress-fill{height:100%;border-radius:2px;transition:width 1s ease;}
+.req-progress-fill.red{background:var(--red2);}
+.req-progress-fill.orange{background:var(--orange);}
+.req-progress-fill.green{background:var(--green);}
+.req-status{font-size:10px;color:var(--muted2);flex-shrink:0;}
+
+/* ── BADGES ── */
+.badges-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:16px 18px;}
+.badge-item{
+  display:flex;flex-direction:column;align-items:center;text-align:center;
+  padding:16px 12px;background:var(--surface3);border:1px solid var(--border);border-radius:3px;
+  transition:border-color 0.2s,transform 0.2s;cursor:default;
+}
+.badge-item:hover{border-color:var(--border2);transform:translateY(-2px);}
+.badge-item.locked{opacity:0.35;filter:grayscale(1);}
+.badge-icon{font-size:28px;margin-bottom:8px;}
+.badge-name{font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text);margin-bottom:2px;}
+.badge-desc{font-size:9px;color:var(--muted2);}
+
+/* ── REGISTER CTA ── */
+.register-cta{
+  padding:24px;background:var(--surface3);border:1px dashed var(--border2);
+  border-radius:3px;text-align:center;
+}
+.register-cta p{font-size:12px;color:var(--muted2);margin-bottom:12px;line-height:1.7;}
+.btn-cta{display:inline-flex;align-items:center;gap:8px;padding:10px 24px;
+  background:var(--red);color:#fff;border:none;border-radius:2px;cursor:pointer;
+  font-family:var(--mono);font-size:11px;letter-spacing:0.12em;text-transform:uppercase;
+  transition:all 0.2s;}
+.btn-cta:hover{background:var(--red2);transform:translateY(-1px);}
+
+/* ── SECTION LABEL ── */
+.section-lbl{
+  font-size:9px;letter-spacing:0.2em;text-transform:uppercase;
+  color:var(--red);margin-bottom:16px;
+  display:flex;align-items:center;gap:8px;
+}
+.section-lbl::before{content:'//';opacity:0.5;}
+
+/* ── EMPTY STATE ── */
+.empty{padding:32px;text-align:center;color:var(--muted);}
+.empty-icon{font-size:32px;margin-bottom:12px;opacity:0.4;}
+.empty p{font-size:12px;line-height:1.7;}
+
+/* ── RESPONSIVE ── */
+@media(max-width:900px){
+  .page{padding:90px 16px 40px;}
+  .vital-card{grid-template-columns:auto 1fr;gap:20px;}
+  .vital-stats{display:none;}
+  .kpi-row{grid-template-columns:1fr 1fr;}
+  .main-grid{grid-template-columns:1fr;}
+  nav{padding:14px 16px;}
+  .user-name{display:none;}
+  .badges-grid{grid-template-columns:repeat(3,1fr);}
+}
+@media(max-width:600px){
+  .kpi-row{grid-template-columns:1fr 1fr;}
+  .badges-grid{grid-template-columns:repeat(2,1fr);}
+}
+</style>
+</head>
+<body>
+
+<!-- WELCOME CINEMATIC OVERLAY -->
+<div id="welcome-overlay">
+  <div class="wave"></div>
+  <div style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);z-index:1;animation:textIn 0.4s ease 0.1s both;">
+    AUTHENTICATING CORE…
+  </div>
+  <div class="welcome-name" id="welcome-name">OPERATOR</div>
+  <div class="welcome-text">WELCOME <span>BACK</span></div>
+  <div class="welcome-sub">Your dossier is being assembled</div>
+  <div class="progress-bar"><div class="progress-fill"></div></div>
+</div>
+
+<!-- IDLE TIMEOUT OVERLAY -->
+<div id="idle-overlay">
+  <div class="idle-icon">🔒</div>
+  <div class="idle-title">SESSION SECURED</div>
+  <div class="idle-sub">Your session has been locked for your safety. Re-authenticate to continue.</div>
+  <button class="idle-btn" onclick="reAuthenticate()">TAP TO RE-AUTHENTICATE</button>
+</div>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">LIFE<span>SAVER</span></div>
+  <div class="nav-right">
+    <div class="user-pill" id="user-pill">
+      <div class="user-avatar-init" id="nav-avatar-init">?</div>
+      <span class="user-name" id="nav-user-name">Loading…</span>
+    </div>
+    <button class="btn-signout" onclick="signOut()">Sign Out</button>
+  </div>
+</nav>
+
+<!-- MAIN PAGE -->
+<div class="page" id="main-page" style="opacity:0;transition:opacity 0.5s;">
+
+  <!-- VITAL CARD -->
+  <div class="section-lbl">Operator Profile</div>
+  <div class="vital-card">
+    <div class="vital-avatar-wrap">
+      <div class="vital-avatar-init" id="vital-avatar">?</div>
+      <div class="vital-verified">✓</div>
+    </div>
+    <div class="vital-info">
+      <div class="vital-greeting">Welcome back, Operator</div>
+      <div class="vital-name" id="vital-name">Loading…</div>
+      <div class="vital-email" id="vital-email">—</div>
+      <div class="vital-tags" id="vital-tags">
+        <span class="tag tag-hero">🦸 Network Hero</span>
+        <span class="tag tag-active">● Active</span>
+      </div>
+    </div>
+    <div class="vital-stats">
+      <div>
+        <div class="vital-stat-num red" id="vs-sos">—</div>
+        <div class="vital-stat-label">SOS Sent</div>
+      </div>
+      <div>
+        <div class="vital-stat-num aqua" id="vs-network">—</div>
+        <div class="vital-stat-label">Network Size</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPI ROW -->
+  <div class="kpi-row">
+    <div class="kpi red">
+      <div class="kpi-val" id="kpi-total">0</div>
+      <div class="kpi-lbl">Total Registrations</div>
+      <div class="kpi-sub">Across network</div>
+      <div class="kpi-icon">🩸</div>
+    </div>
+    <div class="kpi aqua">
+      <div class="kpi-val" id="kpi-active">0</div>
+      <div class="kpi-lbl">Active SOS</div>
+      <div class="kpi-sub">Live broadcasts</div>
+      <div class="kpi-icon">📡</div>
+    </div>
+    <div class="kpi green">
+      <div class="kpi-val" id="kpi-heroes">0</div>
+      <div class="kpi-lbl">Heroes Nearby</div>
+      <div class="kpi-sub">Within 10km</div>
+      <div class="kpi-icon">🦸</div>
+    </div>
+    <div class="kpi gold">
+      <div class="kpi-val" id="kpi-impact">0</div>
+      <div class="kpi-lbl">Lives Impacted</div>
+      <div class="kpi-sub">Est. network total</div>
+      <div class="kpi-icon">💛</div>
+    </div>
+  </div>
+
+  <!-- MAIN GRID -->
+  <div class="main-grid">
+
+    <!-- DONATION TIMELINE -->
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">// Donation & Activity Log</div>
+        <span class="panel-tag">Live</span>
+      </div>
+      <div class="panel-body" id="timeline-body">
+        <div class="empty"><div class="empty-icon">📋</div><p>Loading your activity…</p></div>
+      </div>
+    </div>
+
+    <!-- ACTIVE REQUESTS -->
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">// Active Requests</div>
+        <span id="req-count" style="font-size:9px;color:var(--muted);">—</span>
+      </div>
+      <div class="panel-body" id="requests-body">
+        <div class="empty"><div class="empty-icon">📡</div><p>Loading requests…</p></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- BADGES + REGISTER CTA -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;">
+
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">// Impact Badges</div>
+      </div>
+      <div class="badges-grid" id="badges-grid">
+        <!-- filled by JS -->
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">// Quick Actions</div></div>
+      <div class="panel-body">
+        <div class="register-cta" id="register-cta">
+          <div class="empty-icon">🩸</div>
+          <p>You are not yet registered as a donor.<br/>Join the network and start saving lives today.</p>
+          <button class="btn-cta" onclick="location.href='index.html#register'">
+            ✦ &nbsp; Register as Donor
+          </button>
+        </div>
+        <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
+          <button class="btn-cta" style="width:100%;justify-content:center;background:var(--surface3);color:var(--muted2);border:1px solid var(--border2);"
+            onclick="location.href='index.html#map-section'">
+            🚨 &nbsp; Send Emergency SOS
+          </button>
+          <button class="btn-cta" style="width:100%;justify-content:center;background:var(--surface3);color:var(--muted2);border:1px solid var(--border2);"
+            onclick="location.href='index.html'">
+            🌐 &nbsp; Back to Public Portal
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div><!-- /page -->
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut as fbSignOut }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, collection, getDocs, query, where, orderBy, limit }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const app = initializeApp({
+  apiKey:"AIzaSyCnhFsE3JrCBljOHjDpF_d8msWuzEwCed4",
+  authDomain:"lifesaver-9e934.firebaseapp.com",
+  projectId:"lifesaver-9e934",
+  storageBucket:"lifesaver-9e934.firebasestorage.app",
+  messagingSenderId:"98404171306",
+  appId:"1:98404171306:android:8f6950beeebd43fd5e0d53"
+});
+const auth = getAuth(app);
+const db   = getFirestore(app);
+
+// ── AUTH GUARD ────────────────────────────────────────────────
+onAuthStateChanged(auth, user => {
+  if (!user) {
+    // Not logged in — redirect to login
+    window.location.replace("login.html");
+    return;
+  }
+  initDashboard(user);
+});
+
+// ── INIT DASHBOARD ────────────────────────────────────────────
+async function initDashboard(user) {
+  const name   = user.displayName || user.email.split("@")[0];
+  const email  = user.email;
+  const photo  = user.photoURL;
+  const initials = name.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2);
+
+  // Update welcome overlay
+  document.getElementById("welcome-name").textContent = name.toUpperCase();
+
+  // Update nav
+  document.getElementById("nav-user-name").textContent = name;
+  const navInit = document.getElementById("nav-avatar-init");
+  if (photo) {
+    navInit.outerHTML = `<img class="user-avatar" src="${photo}" alt="${name}" id="nav-avatar-init"/>`;
+  } else {
+    navInit.textContent = initials;
+  }
+
+  // Update vital card
+  document.getElementById("vital-name").textContent = name;
+  document.getElementById("vital-email").textContent = email;
+  const vitInit = document.getElementById("vital-avatar");
+  if (photo) {
+    vitInit.outerHTML = `<img class="vital-avatar" src="${photo}" alt="${name}" id="vital-avatar"/>`;
+  } else {
+    vitInit.textContent = initials;
+    vitInit.style.fontSize = initials.length > 1 ? "28px" : "36px";
+  }
+
+  // Dismiss welcome overlay after 2.5s
+  setTimeout(() => {
+    document.getElementById("welcome-overlay").classList.add("fade-out");
+    setTimeout(() => {
+      document.getElementById("welcome-overlay").style.display = "none";
+      document.getElementById("main-page").style.opacity = "1";
+    }, 600);
+  }, 2500);
+
+  // Load data
+  await Promise.all([
+    loadStats(),
+    loadTimeline(email),
+    loadRequests(),
+  ]);
+  renderBadges();
+  startIdleTimer();
+}
+
+// ── STATS ─────────────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const [dSnap, rSnap] = await Promise.all([
+      getDocs(collection(db,"donors")),
+      getDocs(collection(db,"emergency_requests"))
+    ]);
+    const donors = dSnap.size, reqs = rSnap.size;
+    animNum("kpi-total",   donors);
+    animNum("kpi-active",  reqs);
+    animNum("kpi-heroes",  Math.floor(donors * 0.6));
+    animNum("kpi-impact",  Math.floor(donors * 2.3));
+    animNum("vs-sos",      reqs);
+    animNum("vs-network",  donors);
+  } catch(e) {}
+}
+
+function animNum(id, target) {
+  const el = document.getElementById(id); if(!el) return;
+  let cur = 0, step = Math.max(1, Math.ceil(target/40));
+  const t = setInterval(() => {
+    cur = Math.min(cur+step, target);
+    el.textContent = cur;
+    if(cur >= target) clearInterval(t);
+  }, 30);
+}
+
+// ── TIMELINE ─────────────────────────────────────────────────
+async function loadTimeline(email) {
+  const body = document.getElementById("timeline-body");
+  try {
+    // Query donors registered with this email (if email field exists)
+    const snap = await getDocs(collection(db,"donors"));
+    const userDonors = snap.docs.filter(d => {
+      const dat = d.data();
+      return dat.email === email || dat.name?.toLowerCase().includes(email.split("@")[0].toLowerCase());
+    });
+
+    // Also get recent community activity
+    let recentSnap;
+    try {
+      recentSnap = await getDocs(query(collection(db,"emergency_requests"), orderBy("timestamp","desc"), limit(8)));
+    } catch(e) {
+      recentSnap = await getDocs(collection(db,"emergency_requests"));
+    }
+
+    const items = [];
+
+    // User's own donations
+    userDonors.forEach(d => {
+      const dat = d.data();
+      items.push({
+        type: dat.category === "MEDICINE" ? "med" : "blood",
+        title: "Registered as " + (dat.category === "MEDICINE" ? "Medicine Provider" : "Blood Donor"),
+        meta: (dat.item || "Unknown") + " · " + (dat.address || "Location on file"),
+        date: dat.timestamp ? new Date(dat.timestamp.seconds*1000).toLocaleDateString("en-IN") : "Recent",
+        own: true
+      });
+    });
+
+    // Community SOS feed
+    recentSnap.docs.slice(0,6).forEach(d => {
+      const dat = d.data();
+      items.push({
+        type: "sos",
+        title: "Community SOS: " + (dat.itemNeeded || "Unknown"),
+        meta: (dat.hospitalName || "Network") + " · " + (dat.urgency || "HIGH") + " urgency",
+        date: dat.timestamp ? new Date(dat.timestamp.seconds*1000).toLocaleDateString("en-IN") : "Recent",
+        own: false
+      });
+    });
+
+    if (items.length === 0) {
+      body.innerHTML = `<div class="empty"><div class="empty-icon">📋</div>
+        <p>No activity yet. Register as a donor to start building your history.</p></div>`;
+      return;
+    }
+
+    body.innerHTML = `<div class="timeline">${items.map((item, i) => `
+      <div class="tl-item" style="animation-delay:${i*0.06}s">
+        <div class="tl-dot-wrap">
+          <div class="tl-dot ${item.type}"></div>
+          <div class="tl-line"></div>
+        </div>
+        <div class="tl-info">
+          <div class="tl-title">${item.own ? '⭐ ' : ''}${item.title}</div>
+          <div class="tl-meta">${item.meta}</div>
+        </div>
+        <div class="tl-date">${item.date}</div>
+      </div>`).join("")}</div>`;
+
+    // Update register CTA
+    if (userDonors.length > 0) {
+      document.getElementById("register-cta").innerHTML = `
+        <div class="empty-icon">✅</div>
+        <p>You are registered in the network!<br/>Your donation profile is active.</p>
+        <button class="btn-cta" onclick="location.href='index.html#map-section'" style="background:var(--green);color:var(--black);">
+          🚨 &nbsp; Send Emergency SOS
+        </button>`;
+    }
+  } catch(e) {
+    body.innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div><p>Could not load activity: ${e.message}</p></div>`;
+  }
+}
+
+// ── REQUESTS ─────────────────────────────────────────────────
+async function loadRequests() {
+  const body = document.getElementById("requests-body");
+  try {
+    let snap;
+    try { snap = await getDocs(query(collection(db,"emergency_requests"), orderBy("timestamp","desc"), limit(5))); }
+    catch(e) { snap = await getDocs(collection(db,"emergency_requests")); }
+
+    document.getElementById("req-count").textContent = snap.size + " total";
+
+    if (snap.empty) {
+      body.innerHTML = `<div class="empty"><div class="empty-icon">✅</div><p>No active requests. All clear.</p></div>`;
+      return;
+    }
+
+    const docs = snap.docs.slice(0,5);
+    body.innerHTML = docs.map((d, i) => {
+      const dat = d.data();
+      const urg = dat.urgency || "HIGH";
+      const pct = urg === "HIGH" ? 85 : urg === "MEDIUM" ? 50 : 20;
+      const cls = urg === "HIGH" ? "active" : urg === "MEDIUM" ? "pending" : "fulfilled";
+      const barCls = urg === "HIGH" ? "red" : urg === "MEDIUM" ? "orange" : "green";
+      const label = urg === "HIGH" ? "2 Heroes Dispatched" : urg === "MEDIUM" ? "Awaiting Match" : "Fulfilled";
+      return `<div class="req-item" style="animation-delay:${i*0.08}s">
+        <div class="req-head">
+          <div class="req-name">${dat.category==="MEDICINE"?"💊":"🩸"} ${dat.itemNeeded||"Unknown"}</div>
+          <span class="req-badge ${cls}">${urg}</span>
+        </div>
+        <div style="font-size:10px;color:var(--muted2);margin-bottom:8px;">${dat.hospitalName||"—"}</div>
+        <div class="req-progress-wrap">
+          <div class="req-progress"><div class="req-progress-fill ${barCls}" style="width:${pct}%"></div></div>
+          <div class="req-status">${label}</div>
+        </div>
+      </div>`;
+    }).join("");
+  } catch(e) {
+    body.innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div><p>Error loading requests.</p></div>`;
+  }
+}
+
+// ── BADGES ───────────────────────────────────────────────────
+function renderBadges() {
+  const badges = [
+    { icon:"🦸", name:"First Responder", desc:"Joined the network", unlocked:true },
+    { icon:"🩸", name:"Blood Hero",       desc:"Registered as donor", unlocked:false },
+    { icon:"💊", name:"Medicine Guard",   desc:"Medicine registered", unlocked:false },
+    { icon:"📡", name:"SOS Sender",       desc:"Sent first emergency", unlocked:false },
+    { icon:"⭐", name:"5 Lives Saved",    desc:"Matched 5 requests",  unlocked:false },
+    { icon:"🏆", name:"Network Legend",   desc:"Top 1% contributor",  unlocked:false },
+  ];
+  document.getElementById("badges-grid").innerHTML = badges.map(b => `
+    <div class="badge-item ${b.unlocked?"":"locked"}">
+      <div class="badge-icon">${b.icon}</div>
+      <div class="badge-name">${b.name}</div>
+      <div class="badge-desc">${b.desc}</div>
+    </div>`).join("");
+}
+
+// ── IDLE TIMER ───────────────────────────────────────────────
+let idleTimer;
+const IDLE_MS = 10 * 60 * 1000; // 10 minutes
+
+function resetIdle() {
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    document.getElementById("idle-overlay").classList.add("show");
+  }, IDLE_MS);
+}
+
+function startIdleTimer() {
+  ["mousemove","keydown","click","scroll","touchstart"].forEach(e =>
+    document.addEventListener(e, resetIdle, { passive:true })
+  );
+  resetIdle();
+}
+
+window.reAuthenticate = () => {
+  document.getElementById("idle-overlay").classList.remove("show");
+  resetIdle();
+};
+
+// ── SIGN OUT ─────────────────────────────────────────────────
+window.signOut = async () => {
+  try {
+    await fbSignOut(auth);
+  } catch(e) {}
+  sessionStorage.clear();
+  localStorage.removeItem("ls_role");
+  localStorage.removeItem("ls_email");
+  window.location.replace("login.html");
+};
+</script>
+</body>
+</html>

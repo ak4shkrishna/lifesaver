@@ -15,6 +15,7 @@ declare global {
         user: IUser;
         supabase: SupabaseClient;
         timestamp: string;
+        userAgent?: string;
     }
 
     interface IDevice {
@@ -207,5 +208,6 @@ declare global {
         firstMessage: string;
         systemPrompt: string;
         closeHandler: () => Promise<void>;
+        broadcastFn?: (payload: { type: 'user_transcript' | 'ai_transcript'; text: string }) => void;
     }
 }

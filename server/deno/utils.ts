@@ -116,16 +116,12 @@ export const authenticateUser = async (
     authToken: string,
 ): Promise<IUser> => {
     try {
-        const jwtSecret = Deno.env.get('JWT_SECRET_KEY');
-
-        if (!jwtSecret) throw new Error('JWT_SECRET_KEY not configured');
-
-        const secretBytes = new TextEncoder().encode(jwtSecret);
-        const payload = await jose.jwtVerify(authToken, secretBytes);
-
-        const { payload: { email } } = payload;
-        const user = await getUserByEmail(supabaseClient, email as string);
-        return user;
+        const { data: { user }, error } = await supabaseClient.auth.getUser(authToken);
+        if (error || !user) throw new Error(error?.message || 'Invalid token');
+        
+        const email = user.email;
+        const dbUser = await getUserByEmail(supabaseClient, email as string);
+        return dbUser;
     } catch (error: any) {
         throw new Error(error.message || 'Failed to authenticate user');
     }

@@ -20,12 +20,32 @@ const server = createServer();
 
 const wss: _WebSocketServer = new WebSocketServer({ noServer: true, perMessageDeflate: false });
 
+export const browserClients = new Set<WSWebSocket>();
+
+export function broadcastToBrowsers(data: object) {
+    console.log('broadcastToBrowsers called, clients:', browserClients.size, JSON.stringify(data));
+    (globalThis as any)._browserClientsSize = browserClients.size;
+    const msg = JSON.stringify(data);
+    browserClients.forEach(ws => {
+        if (ws.readyState === 1) ws.send(msg);
+    });
+}
+
 wss.on('headers', (headers, req) => {
     // You should NOT see any "Sec-WebSocket-Extensions" here
     console.log('WS response headers :', headers);
 });
 
 wss.on('connection', async (ws: WSWebSocket, payload: IPayload) => {
+    const isEsp32 = payload.userAgent?.includes('arduino') ?? false;
+    
+    if (!isEsp32) {
+        // Browser — just add to listeners, don't start OpenAI session
+        browserClients.add(ws);
+        ws.on('close', () => browserClients.delete(ws));
+        return;
+    }
+
     const { user, supabase } = payload;
 
     let connectionPcmFile: Deno.FsFile | null = null;
@@ -80,6 +100,7 @@ Start every session by saying: Lifesaver online. How can I help?`;
         firstMessage,
         systemPrompt,
         closeHandler,
+        broadcastFn: (payload) => broadcastToBrowsers(payload),
     };
 
     switch (provider) {
@@ -153,16 +174,22 @@ server.on('upgrade', async (req, socket, head) => {
             return;
         }
     } catch (_e: any) {
-        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
-        socket.destroy();
-        return;
-    }
+    console.error('AUTH ERROR:', _e.message, _e);
+    socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+    socket.destroy();
+    return;
+}
+
+
+
+
 
     wss.handleUpgrade(req, socket, head, (ws) => {
         wss.emit('connection', ws, {
             user,
             supabase,
             timestamp: new Date().toISOString(),
+            userAgent: req.headers['user-agent'],
         });
     });
 });

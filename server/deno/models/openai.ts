@@ -58,11 +58,15 @@ async function firestoreQuery(
         });
 
         if (!res.ok) {
-            console.error("Firestore query error:", await res.text());
+            const errText = await res.text();
+            console.error("Firestore query error:", errText);
             return [];
         }
 
-        const rows: unknown[] = await res.json();
+        const rawJson = await res.json();
+        console.log("Firestore raw response:", JSON.stringify(rawJson).slice(0, 500));
+        const rows: unknown[] = rawJson as unknown[];
+        
         return (rows as any[])
             .filter((r) => r.document)
             .map((r) => {
@@ -80,6 +84,53 @@ async function firestoreQuery(
     }
 }
 // ────────────────────────────────────────────────────────────────────────────
+
+// ── TOOL DEFINITIONS (single source of truth) ─────────────────────────────
+const TOOL_DEFINITIONS = [
+    {
+        type: 'function',
+        name: 'end_session',
+        description: 'Call this if the user says bye or needs to leave.',
+        parameters: {
+            type: 'object',
+            properties: { reason: { type: 'string', description: 'Short reason for ending the session.' } },
+            required: ['reason'],
+        },
+    },
+    {
+        type: 'function',
+        name: 'broadcast_sos',
+        description: 'Broadcast an emergency SOS to the Lifesaver network for blood or medicine.',
+        parameters: {
+            type: 'object',
+            properties: {
+                item:     { type: 'string' },
+                category: { type: 'string', enum: ['BLOOD', 'MEDICINE'] },
+                hospital: { type: 'string' },
+                urgency:  { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
+            },
+            required: ['item', 'category', 'hospital', 'urgency'],
+        },
+    },
+    {
+        type: 'function',
+        name: 'find_donors',
+        description: 'Find available blood donors or medicine providers in the Lifesaver network.',
+        parameters: {
+            type: 'object',
+            properties: {
+                item:     { type: 'string' },
+                category: { type: 'string', enum: ['BLOOD', 'MEDICINE'] },
+            },
+            required: ['item', 'category'],
+        },
+    },
+] as const;
+
+const LIFESAVER_INSTRUCTIONS = `You are LIFESAVER AI, an emergency response assistant for a blood and medicine donor network in Bengaluru, India.
+Help find blood donors, medicine providers, and broadcast SOS alerts.
+IMPORTANT: When calling a tool, do NOT speak before or during the tool call. Wait for the tool result, then speak ONLY the final answer. Never say "let me check". Just call the tool silently and respond with the result.
+Keep responses under 2 sentences.`;
 
 const sendFirstMessage = (client: RealtimeClient, firstMessage: string) => {
     const event = {
@@ -110,6 +161,7 @@ export const connectToOpenAI = async ({
     firstMessage,
     systemPrompt,
     closeHandler,
+    broadcastFn,
 }: ProviderArgs) => {
     const { user, supabase } = payload;
 
@@ -123,23 +175,7 @@ export const connectToOpenAI = async ({
 
     // ── TOOL: end_session ──────────────────────────────────────────────────
     client.addTool(
-        {
-            type: 'function',
-            name: 'end_session',
-            description:
-                'Call this if the user says bye or needs to leave or suggests they want to end the session. (e.g. "I gotta to go", "I have to work", "I have to sleep", "I have to do something else")',
-            parameters: {
-                type: 'object',
-                strict: true,
-                properties: {
-                    reason: {
-                        type: 'string',
-                        description: 'Short reason for ending the session.',
-                    },
-                },
-                required: ['reason'],
-            },
-        },
+        TOOL_DEFINITIONS[0],
         (args: any) => {
             console.log('end session', args);
             ws.send(JSON.stringify({ type: 'server', msg: 'SESSION.END' }));
@@ -149,43 +185,30 @@ export const connectToOpenAI = async ({
 
     // ── TOOL: broadcast_sos ────────────────────────────────────────────────
     client.addTool(
-        {
-            type: 'function',
-            name: 'broadcast_sos',
-            description:
-                'Broadcast an emergency SOS to the Lifesaver network when someone urgently needs blood or medicine. ' +
-                'Use when the user says things like "we need O positive", "broadcast emergency for insulin", ' +
-                '"send SOS for B negative blood", "alert donors for Type 2 insulin".',
-            parameters: {
-                type: 'object',
-                strict: true,
-                properties: {
-                    item: {
-                        type: 'string',
-                        description: 'Blood type (e.g. O+, B-, AB+) or medicine name (e.g. Insulin, Anti-Venom)',
-                    },
-                    category: {
-                        type: 'string',
-                        enum: ['BLOOD', 'MEDICINE'],
-                        description: 'Whether this is a blood or medicine emergency',
-                    },
-                    hospital: {
-                        type: 'string',
-                        description: 'Hospital or location name where blood/medicine is needed',
-                    },
-                    urgency: {
-                        type: 'string',
-                        enum: ['HIGH', 'MEDIUM', 'LOW'],
-                        description: 'Urgency level of the emergency',
-                    },
-                },
-                required: ['item', 'category', 'hospital', 'urgency'],
-            },
-        },
+        TOOL_DEFINITIONS[1],
         async (args: any) => {
             console.log('broadcast_sos called:', args);
+            
+            const normalizeItem = (raw: string) => {
+                const s = raw.toUpperCase().trim();
+                // Strip trailing words like "blood", "donors", "type"
+                const cleaned = s.replace(/\b(BLOOD|DONORS?|TYPE|PROVIDER|MEDICINE)\b/g, '').trim();
+                const wordMap: Record<string, string> = {
+                    'O NEGATIVE': 'O-', 'O POSITIVE': 'O+',
+                    'A NEGATIVE': 'A-', 'A POSITIVE': 'A+',
+                    'B NEGATIVE': 'B-', 'B POSITIVE': 'B+',
+                    'AB NEGATIVE': 'AB-', 'AB POSITIVE': 'AB+',
+                };
+                if (wordMap[cleaned]) return wordMap[cleaned];
+                const symbolMatch = cleaned.match(/^(AB|A|B|O)[+-]$/);
+                if (symbolMatch) return symbolMatch[0];
+                return cleaned;
+            };
+            
+            const item = normalizeItem(args.item);
+            
             const ok = await firestoreAdd('emergency_requests', {
-                itemNeeded:   { stringValue: args.item.toUpperCase() },
+                itemNeeded:   { stringValue: item },
                 category:     { stringValue: args.category },
                 hospitalName: { stringValue: args.hospital },
                 urgency:      { stringValue: args.urgency },
@@ -204,46 +227,65 @@ export const connectToOpenAI = async ({
 
     // ── TOOL: find_donors ──────────────────────────────────────────────────
     client.addTool(
-        {
-            type: 'function',
-            name: 'find_donors',
-            description:
-                'Find available blood donors or medicine providers registered in the Lifesaver network. ' +
-                'Use when the user asks "who has O negative blood", "find donors for insulin", ' +
-                '"are there any B positive donors nearby", "check medicine availability".',
-            parameters: {
-                type: 'object',
-                strict: true,
-                properties: {
-                    item: {
-                        type: 'string',
-                        description: 'Blood type (e.g. O+, B-) or medicine name to search for',
-                    },
-                    category: {
-                        type: 'string',
-                        enum: ['BLOOD', 'MEDICINE'],
-                        description: 'Whether to search for blood donors or medicine providers',
-                    },
-                },
-                required: ['item', 'category'],
-            },
-        },
+        TOOL_DEFINITIONS[2],
         async (args: any) => {
             console.log('find_donors called:', args);
-            const donors = await firestoreQuery(
+            
+            // Normalize blood type — strip extra words, keep just e.g. "O+"
+            const normalizeItem = (raw: string) => {
+                const s = raw.toUpperCase().trim();
+                // Strip trailing words like "blood", "donors", "type"
+                const cleaned = s.replace(/\b(BLOOD|DONORS?|TYPE|PROVIDER|MEDICINE)\b/g, '').trim();
+                const wordMap: Record<string, string> = {
+                    'O NEGATIVE': 'O-', 'O POSITIVE': 'O+',
+                    'A NEGATIVE': 'A-', 'A POSITIVE': 'A+',
+                    'B NEGATIVE': 'B-', 'B POSITIVE': 'B+',
+                    'AB NEGATIVE': 'AB-', 'AB POSITIVE': 'AB+',
+                };
+                if (wordMap[cleaned]) return wordMap[cleaned];
+                const symbolMatch = cleaned.match(/^(AB|A|B|O)[+-]$/);
+                if (symbolMatch) return symbolMatch[0];
+                return cleaned;
+            };
+            
+            const item = normalizeItem(args.item);
+            console.log('normalized item:', item);
+
+            // Query 1: new schema
+            const newSchemaDonors = await firestoreQuery(
                 'donors',
                 [
-                    { field: 'item',       value: args.item.toUpperCase(), kind: 'string'  },
-                    { field: 'category',   value: args.category,           kind: 'string'  },
-                    { field: 'isEligible', value: true,                    kind: 'boolean' },
+                    { field: 'item',     value: item,          kind: 'string' },
+                    { field: 'category', value: args.category, kind: 'string' },
                 ],
-                3,
+                10,
             );
+
+            // Query 2: old schema
+            const oldSchemaDonors = await firestoreQuery(
+                'donors',
+                [
+                    { field: 'bloodType', value: item, kind: 'string' },
+                ],
+                10,
+            );
+
+            console.log('newSchemaDonors:', JSON.stringify(newSchemaDonors));
+            console.log('oldSchemaDonors:', JSON.stringify(oldSchemaDonors));
+
+            // Merge, deduplicate by name+phone
+            const seen = new Set<string>();
+            const donors = [...newSchemaDonors, ...oldSchemaDonors].filter(d => {
+                const key = `${d.name}${d.phone}`;
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
 
             if (donors.length === 0) {
                 return {
                     found: 0,
-                    message: `No ${args.item} donors found right now. I recommend broadcasting an SOS to alert the network.`,
+                    message: `No ${item} donors found right now. I recommend broadcasting an SOS to alert the network.`,
                 };
             }
 
@@ -271,55 +313,13 @@ export const connectToOpenAI = async ({
     client.realtime.ws.send(JSON.stringify({
         type: 'session.update',
         session: {
-            instructions: `You are LIFESAVER AI, an emergency response assistant for a blood and medicine donor network in Bengaluru, India.
-Help find blood donors, medicine providers, and broadcast SOS alerts.
-IMPORTANT: When calling a tool, do NOT speak before or during the tool call. Wait for the tool result, then speak ONLY the final answer with the result. Never say "let me check" or "one moment". Just call the tool silently and respond with the result directly.
-Keep responses under 2 sentences.
-Start by saying: Lifesaver online. How can I help?`,
+            instructions: LIFESAVER_INSTRUCTIONS,
             tool_choice: 'auto',
-           
-            tools: [
-                {
-                    type: 'function',
-                    name: 'end_session',
-                    description: 'Call when user wants to end the session.',
-                    parameters: {
-                        type: 'object',
-                        properties: {
-                            reason: { type: 'string' }
-                        },
-                        required: ['reason']
-                    }
-                },
-                {
-                    type: 'function',
-                    name: 'broadcast_sos',
-                    description: 'Broadcast emergency SOS for blood or medicine to the Lifesaver network.',
-                    parameters: {
-                        type: 'object',
-                        properties: {
-                            item:     { type: 'string' },
-                            category: { type: 'string', enum: ['BLOOD', 'MEDICINE'] },
-                            hospital: { type: 'string' },
-                            urgency:  { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] }
-                        },
-                        required: ['item', 'category', 'hospital', 'urgency']
-                    }
-                },
-                {
-                    type: 'function',
-                    name: 'find_donors',
-                    description: 'Find blood donors or medicine providers in the Lifesaver network.',
-                    parameters: {
-                        type: 'object',
-                        properties: {
-                            item:     { type: 'string' },
-                            category: { type: 'string', enum: ['BLOOD', 'MEDICINE'] }
-                        },
-                        required: ['item', 'category']
-                    }
-                }
-            ]
+            tools: TOOL_DEFINITIONS,
+            input_audio_transcription: {
+                model: 'whisper-1',
+                prompt: 'Lifesaver, blood donor, O positive, O negative, A positive, B negative, AB positive, plasma, medicine, insulin, SOS, broadcast, hospital, urgency, HIGH, MEDIUM, LOW, Bengaluru',
+            },
         }
     }));
 
@@ -336,9 +336,12 @@ Start by saying: Lifesaver online. How can I help?`,
     if (!hasNoAudio && !hasToolCall) {
         ws.send(JSON.stringify({ type: 'server', msg: 'RESPONSE.COMPLETE' }));
     }
-        } else if (event.type === 'response.audio_transcript.done') {
+        } else if (event.type === 'response.output_audio_transcript.done') {
             console.log('response.audio_transcript.done', event);
+            console.log('broadcasting ai transcript, browserClients size:', (globalThis as any)._browserClientsSize);
             await addConversation(supabase, 'assistant', event.transcript, user);
+            broadcastFn?.({ type: 'ai_transcript', text: event.transcript });
+            console.log('broadcast sent:', event.transcript);
         } else if (event.type === 'input_audio_buffer.committed') {
             ws.send(JSON.stringify({ type: 'server', msg: 'AUDIO.COMMITTED' }));
         }
@@ -380,6 +383,7 @@ Start by saying: Lifesaver online. How can I help?`,
                     case 'conversation.item.input_audio_transcription.completed':
                         console.log('user transcription:', event);
                         await addConversation(supabase, 'user', event.transcript, user);
+                        broadcastFn?.({ type: 'user_transcript', text: event.transcript });
                         break;
                 }
             } catch (error) {
@@ -486,13 +490,6 @@ Start by saying: Lifesaver online. How can I help?`,
     // ── CONNECT ────────────────────────────────────────────────────────────
     try {
         console.log(`Connecting to OpenAI...`);
-            const lifesaverInstructions = `You are LIFESAVER AI, an emergency response assistant for a blood and medicine donor network in Bengaluru, India.
-You help hospital staff and citizens with:
-- Finding blood donors by blood type (say "find O positive donors")
-- Finding medicine providers (say "find insulin providers")
-- Broadcasting emergency SOS alerts (say "broadcast SOS for O negative blood at City Hospital high urgency")
-Always be calm, fast and clear. Keep responses under 2 sentences since this is a voice device.
-Start every session by saying: Lifesaver online. How can I help?`;
 
 const sessionOptions = {
     model: 'gpt-realtime-2',
@@ -503,54 +500,13 @@ const sessionOptions = {
         silence_duration_ms: 1000,
     },
     voice: user.personality?.oai_voice ?? defaultOpenAIVoice,
-    instructions: lifesaverInstructions,
+    instructions: LIFESAVER_INSTRUCTIONS,
     input_audio_transcription: { 
     model: 'whisper-1',
     prompt: 'Lifesaver, blood donor, O positive, O negative, A positive, B negative, AB positive, plasma, medicine, insulin, SOS, broadcast, hospital, urgency, HIGH, MEDIUM, LOW, Bengaluru'
 },
     tool_choice: 'auto',
-    tools: [
-        {
-            type: 'function',
-            name: 'end_session',
-            description: 'Call this if the user says bye or wants to end the session.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    reason: { type: 'string', description: 'Reason for ending session.' },
-                },
-                required: ['reason'],
-            },
-        },
-        {
-            type: 'function',
-            name: 'broadcast_sos',
-            description: 'Broadcast an emergency SOS to the Lifesaver network for blood or medicine.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    item:     { type: 'string', description: 'Blood type e.g. O+, B- or medicine name e.g. Insulin' },
-                    category: { type: 'string', enum: ['BLOOD', 'MEDICINE'], description: 'Blood or medicine emergency' },
-                    hospital: { type: 'string', description: 'Hospital or location name' },
-                    urgency:  { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'], description: 'Urgency level' },
-                },
-                required: ['item', 'category', 'hospital', 'urgency'],
-            },
-        },
-        {
-            type: 'function',
-            name: 'find_donors',
-            description: 'Find available blood donors or medicine providers in the Lifesaver network.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    item:     { type: 'string', description: 'Blood type e.g. O+, B- or medicine name' },
-                    category: { type: 'string', enum: ['BLOOD', 'MEDICINE'], description: 'Blood or medicine search' },
-                },
-                required: ['item', 'category'],
-            },
-        },
-    ],
+    tools: TOOL_DEFINITIONS,
 };
         await client.connect(sessionOptions as any);
     } catch (e: unknown) {

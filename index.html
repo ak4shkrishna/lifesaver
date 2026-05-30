@@ -936,10 +936,11 @@ footer {
         <th>Hospital</th>
         <th>Urgency</th>
         <th>Status</th>
+        <th>Action</th>
       </tr>
     </thead>
     <tbody id="feed-body">
-      <tr><td colspan="5" style="color:var(--muted);text-align:center;padding:40px;">Loading feed…</td></tr>
+      <tr><td colspan="6" style="color:var(--muted);text-align:center;padding:40px;">Loading feed…</td></tr>
     </tbody>
   </table>
 </section>
@@ -1412,8 +1413,72 @@ function buildRow(d, isNew) {
     <td>${dat.category || "BLOOD"}</td>
     <td>${dat.hospitalName || "—"}</td>
     <td><span class="urgency-badge urgency-${u}">${u}</span></td>
-    <td style="color:var(--red2);">● Live</td>`;
+    <td style="color:var(--red2);">● Live</td>
+    <td style="display:flex;align-items:center;gap:8px;">
+      <span id="vol-count-${d.id}" style="font-size:10px;color:#00E676;"></span>
+      <button id="vol-btn-${d.id}" onclick="citizenVolunteer('${d.id}','${dat.itemNeeded||''}',event)" 
+        style="padding:5px 12px;background:rgba(232,37,26,0.15);border:1px solid rgba(232,37,26,0.3);
+        border-radius:2px;color:#FF4436;font-family:monospace;font-size:10px;cursor:pointer;
+        letter-spacing:0.08em;text-transform:uppercase;">I Can Help</button>
+    </td>`;
   return tr;
+}
+
+window.citizenVolunteer = async (requestId, item, e) => {
+  e.stopPropagation();
+  if (!window._currentUser) {
+    window.location.href = 'login.html?return=' + encodeURIComponent('index.html#feed');
+    return;
+  }
+  const btn = document.getElementById('vol-btn-' + requestId);
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+  try {
+    await addDoc(collection(db, 'volunteer_responses'), {
+      requestId,
+      item,
+      volunteerEmail: window._currentUser.email,
+      volunteerName:  window._currentUser.displayName || window._currentUser.email.split('@')[0],
+      timestamp: serverTimestamp(),
+    });
+    btn.textContent = '✓ You responded';
+    btn.style.color = '#00E676';
+    btn.style.borderColor = 'rgba(0,230,118,0.3)';
+    btn.style.background = 'rgba(0,230,118,0.08)';
+    // refresh count
+    loadVolCountForRow(requestId);
+  } catch(err) {
+    btn.disabled = false;
+    btn.textContent = 'I Can Help';
+    alert('Error: ' + err.message);
+  }
+};
+
+async function loadVolCountForRow(requestId) {
+  try {
+    const snap = await getDocs(
+      query(collection(db, 'volunteer_responses'), where('requestId', '==', requestId))
+    );
+    const el = document.getElementById('vol-count-' + requestId);
+    if (el && snap.size > 0) {
+      el.textContent = snap.size + ' ready';
+    }
+  } catch(_) {}
+}
+
+async function loadAllVolCounts() {
+  try {
+    const snap = await getDocs(collection(db, 'volunteer_responses'));
+    const counts = {};
+    snap.forEach(d => {
+      const rid = d.data().requestId;
+      counts[rid] = (counts[rid] || 0) + 1;
+    });
+    Object.entries(counts).forEach(([id, count]) => {
+      const el = document.getElementById('vol-count-' + id);
+      if (el) el.textContent = count + ' ready';
+    });
+  } catch(_) {}
 }
 
 function startFeedListener() {
@@ -1422,39 +1487,47 @@ function startFeedListener() {
     orderBy("timestamp", "desc"),
     limit(15)
   );
-  onSnapshot(q, (snap) => {
-    const tbody = document.getElementById("feed-body");
-    if (snap.empty) {
-      tbody.innerHTML = `<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:40px;">No active broadcasts. All clear.</td></tr>`;
-      document.getElementById("feed-count").textContent = "All Clear";
-      isFirstLoad = false; return;
-    }
-    document.getElementById("feed-count").textContent = snap.size + " Active Broadcast" + (snap.size !== 1 ? "s" : "");
-    if (isFirstLoad) {
-      tbody.innerHTML = "";
-      snap.docs.forEach(d => { knownIds.add(d.id); tbody.appendChild(buildRow(d, false)); });
-      isFirstLoad = false; return;
-    }
-    const newIds = new Set(snap.docs.map(d => d.id));
-    const addedDocs = snap.docs.filter(d => !knownIds.has(d.id));
-    if (addedDocs.length > 0) {
-      Array.from(tbody.rows).forEach(r => {
-        r.classList.remove("feed-row-new","feed-row-push");
-        void r.offsetWidth;
-        r.classList.add("feed-row-push");
-      });
-      addedDocs.forEach(d => {
-        const row = buildRow(d, true);
-        tbody.insertBefore(row, tbody.firstChild);
-        knownIds.add(d.id);
-      });
-      while (tbody.rows.length > 15) tbody.deleteRow(tbody.rows.length - 1);
-    }
-    knownIds = newIds;
-  }, () => {
-    document.getElementById("feed-body").innerHTML =
-      `<tr><td colspan="5" style="color:var(--red2);text-align:center;padding:40px;">Failed to load live feed.</td></tr>`;
+  onSnapshot(q, (snapshot) => {
+  const tbody = document.getElementById("feed-body");
+  const docs = snapshot.docs.filter(d => !d.data().resolved);
+
+  if (docs.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:40px;">No active broadcasts. All clear.</td></tr>`;
+    document.getElementById("feed-count").textContent = "All Clear";
+    isFirstLoad = false; return;
+  }
+  document.getElementById("feed-count").textContent = docs.length + " Active Broadcast" + (docs.length !== 1 ? "s" : "");
+  if (isFirstLoad) {
+    tbody.innerHTML = "";
+    docs.forEach(d => { knownIds.add(d.id); tbody.appendChild(buildRow(d, false)); });
+    isFirstLoad = false;
+    loadAllVolCounts();
+    return;
+  }
+  const newIds = new Set(docs.map(d => d.id));
+  const addedDocs = docs.filter(d => !knownIds.has(d.id));
+  if (addedDocs.length > 0) {
+    Array.from(tbody.rows).forEach(r => {
+      r.classList.remove("feed-row-new","feed-row-push");
+      void r.offsetWidth;
+      r.classList.add("feed-row-push");
+    });
+    addedDocs.forEach(d => {
+      const row = buildRow(d, true);
+      tbody.insertBefore(row, tbody.firstChild);
+      knownIds.add(d.id);
+    });
+    while (tbody.rows.length > 15) tbody.deleteRow(tbody.rows.length - 1);
+  }
+  // Also remove rows that got resolved
+  Array.from(tbody.rows).forEach(r => {
+    if (r.dataset.id && !newIds.has(r.dataset.id)) r.remove();
   });
+  knownIds = newIds;
+}, () => {
+  document.getElementById("feed-body").innerHTML =
+    `<tr><td colspan="6" style="color:var(--red2);text-align:center;padding:40px;">Failed to load live feed.</td></tr>`;
+});
 }
 
 // ─── STATS ───────────────────────────────────────────────────────────
@@ -1492,6 +1565,7 @@ m.innerHTML = marqueeItems.map(t => `<div class="marquee-item">${t}</div>`).join
 
 startFeedListener();
 loadStats();
+loadAllVolCounts();
 </script>
 
 <script>

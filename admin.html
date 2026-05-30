@@ -437,9 +437,9 @@ body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;
         <div class="feed-wrap" id="feed-wrap-dash">
           <table class="data-table">
             <thead><tr>
-              <th>Item</th><th>Category</th><th>Facility</th><th>Units</th><th>Urgency</th><th>Time</th><th>Status</th>
+              <th>Item</th><th>Category</th><th>Facility</th><th>Units</th><th>Urgency</th><th>Time</th><th>Volunteers</th><th>Action</th>
             </tr></thead>
-            <tbody id="feed-tbody-dash"><tr><td colspan="7"><div class="empty-state"><div class="icon">📡</div>Loading feed…</div></td></tr></tbody>
+            <tbody id="feed-tbody-dash"><tr><td colspan="8"><div class="empty-state"><div class="icon">📡</div>Loading feed…</div></td></tr></tbody>
           </table>
         </div>
       </div>
@@ -629,6 +629,7 @@ body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;
         <div class="view-sub">Complete registered donor database</div>
       </div>
       <div style="display:flex;gap:10px;margin-bottom:16px;">
+        <button class="btn-sm" onclick="openAddDonorModal()">+ Add Donor</button>
         <button class="btn-sm" onclick="exportDonors()">⬇ Export CSV</button>
         <button class="btn-sm" onclick="loadAllDonors()">↻ Refresh</button>
       </div>
@@ -1281,9 +1282,42 @@ function buildFeedRow(d, isNew){
     <td>${dat.hospitalName||"—"}</td>
     <td>${dat.units||"—"}</td>
     <td><span class="urgency-badge u-${u}">${u}</span></td>
-    <td>${dat.source==="admin"?"⬛ Admin":"🌐 Public"}</td>
-    <td style="font-size:10px;color:var(--muted);">${ts}</td>`;
+    <td style="font-size:10px;color:var(--muted);">${ts}</td>
+    <td id="vol-${d.id}" style="font-size:10px;color:var(--aqua);cursor:pointer;" onclick="showVolunteers('${d.id}')">—</td>
+    <td><button class="vbtn approve" onclick="resolveRequest('${d.id}')">✓ Resolve</button></td>`;
   return tr;
+}
+
+window.resolveRequest = async(id) => {
+  if(!confirm("Mark this request as resolved? It will be removed from the public feed.")) return;
+  try {
+    await updateDoc(doc(db,"emergency_requests",id), {
+      resolved: true,
+      resolvedAt: serverTimestamp()
+    });
+    toast("Request resolved ✓","ok");
+    startFeedListener();
+    loadStats();
+  } catch(e) { toast("Error: "+e.message,"err"); }
+};
+
+// Load volunteer responses and show count next to each request
+async function loadVolunteerCounts() {
+  try {
+    const snap = await getDocs(collection(db, "volunteer_responses"));
+    const counts = {};
+    snap.forEach(d => {
+      const rid = d.data().requestId;
+      counts[rid] = (counts[rid] || 0) + 1;
+    });
+    Object.entries(counts).forEach(([id, count]) => {
+      const el = document.getElementById("vol-" + id);
+      if (el) {
+        el.textContent = count + " volunteer" + (count !== 1 ? "s" : "");
+        el.style.color = "var(--green)";
+      }
+    });
+  } catch(e) {}
 }
 
 function setTableEmpty(id, msg, cols){
@@ -1694,8 +1728,109 @@ loadDonors().then(docs=>{
 
 // Start real-time feed listener
 startFeedListener();
+loadVolunteerCounts();
+
+  window.showVolunteers = async (requestId) => {
+    try {
+      const snap = await getDocs(
+        query(collection(db, 'volunteer_responses'), where('requestId', '==', requestId))
+      );
+      if (!snap.size) { toast("No volunteers yet", "info"); return; }
+      const names = snap.docs.map(d => {
+        const dat = d.data();
+        return `• ${dat.volunteerName} (${dat.volunteerEmail})`;
+      }).join('\n');
+      alert(`${snap.size} volunteer(s) ready:\n\n${names}`);
+    } catch(e) { toast("Error: " + e.message, "err"); }
+  };
+
+  window.openAddDonorModal = () => {
+    document.getElementById("add-donor-modal").classList.add("open");
+    document.getElementById("ad-feedback").style.display = "none";
+  };
+  window.closeAddDonorModal = (e) => {
+    if(e && e.target !== document.getElementById("add-donor-modal")) return;
+    document.getElementById("add-donor-modal").classList.remove("open");
+  };
+  window.toggleAddDonorItem = () => {
+    const cat = document.getElementById("ad-category").value;
+    document.getElementById("ad-item-blood").style.display = cat === "BLOOD" ? "block" : "none";
+    document.getElementById("ad-item-medicine").style.display = cat === "MEDICINE" ? "block" : "none";
+  };
+  window.submitAddDonor = async() => {
+    const name    = document.getElementById("ad-name").value.trim();
+    const phone   = document.getElementById("ad-phone").value.trim();
+    const address = document.getElementById("ad-address").value.trim();
+    const category= document.getElementById("ad-category").value;
+    const item    = category === "BLOOD"
+      ? document.getElementById("ad-bloodtype").value
+      : document.getElementById("ad-medicine").value.trim().toUpperCase();
+
+    if(!name || !phone || !item) {
+      const fb = document.getElementById("ad-feedback");
+      fb.textContent = "Please fill in name, phone and item.";
+      fb.style.display = "block";
+      fb.style.background = "var(--red-dim)";
+      fb.style.color = "var(--red2)";
+      fb.style.borderLeft = "3px solid var(--red)";
+      return;
+    }
+    try {
+      await addDoc(collection(db,"donors"), {
+        name, phone, address, category, item,
+        isEligible: true,
+        verified: true,
+        source: "admin",
+        timestamp: serverTimestamp(),
+      });
+      toast("Donor added ✓","ok");
+      document.getElementById("add-donor-modal").classList.remove("open");
+      loadAllDonors();
+      loadStats();
+    } catch(e) { toast("Error: "+e.message,"err"); }
+  };
 
 </script>
+<!-- ADD DONOR MODAL -->
+<div class="modal-overlay" id="add-donor-modal" onclick="closeAddDonorModal(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">ADD DONOR</div>
+      <button class="modal-close" onclick="closeAddDonorModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="settings-group"><label>Full Name</label>
+        <input class="cmd-input" style="margin-bottom:0;" id="ad-name" type="text" placeholder="Donor name…"/></div>
+      <div class="settings-group"><label>Phone Number</label>
+        <input class="cmd-input" style="margin-bottom:0;" id="ad-phone" type="tel" placeholder="+91 98765 43210…"/></div>
+      <div class="settings-group"><label>Address</label>
+        <input class="cmd-input" style="margin-bottom:0;" id="ad-address" type="text" placeholder="Area, City…"/></div>
+      <div class="settings-group"><label>Category</label>
+        <select class="cmd-input" id="ad-category" style="margin-bottom:0;" onchange="toggleAddDonorItem()">
+          <option value="BLOOD">🩸 Blood</option>
+          <option value="MEDICINE">💊 Medicine</option>
+        </select>
+      </div>
+      <div class="settings-group" id="ad-item-blood">
+        <label>Blood Type</label>
+        <select class="cmd-input" id="ad-bloodtype" style="margin-bottom:0;">
+          <option value="A+">A+</option><option value="A-">A-</option>
+          <option value="B+">B+</option><option value="B-">B-</option>
+          <option value="AB+">AB+</option><option value="AB-">AB-</option>
+          <option value="O+">O+</option><option value="O-">O-</option>
+        </select>
+      </div>
+      <div class="settings-group" id="ad-item-medicine" style="display:none;">
+        <label>Medicine Name</label>
+        <input class="cmd-input" style="margin-bottom:0;" id="ad-medicine" type="text" placeholder="e.g. Insulin, Inhaler…"/></div>
+      <div id="ad-feedback" style="display:none;margin-top:10px;padding:10px 12px;border-radius:2px;font-size:11px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-sm" onclick="closeAddDonorModal()">Cancel</button>
+      <button class="btn-sm" onclick="submitAddDonor()" style="background:var(--green);color:var(--black);border-color:var(--green);">+ Add Donor</button>
+    </div>
+  </div>
+</div>
 <script src="voice-widget.js"></script>
 </body>
 </html>
